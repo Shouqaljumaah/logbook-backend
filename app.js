@@ -1,13 +1,23 @@
+require("dotenv").config();
+
+const path = require("path");
 const express = require("express");
-
-const app = express();
-
 const connectDB = require("./database");
-
+const passport = require("passport");
+const cors = require("cors");
+const app = express();
 const PORT = 8000;
 
+app.use(cors());
 app.use(express.json());
+app.use(passport.initialize());
+passport.use(localStrategy);
+passport.use(jwtStrategy);
 
+app.use("/categaries", categariesRoutes);
+app.use("/recipes", formsRoutes);
+app.use("/api/users", usersRouter);
+app.use("/media", express.static(path.join(__dirname, "media")));
 connectDB();
 
 app.listen(PORT, () => {
