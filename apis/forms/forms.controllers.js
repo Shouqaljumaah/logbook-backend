@@ -2,7 +2,7 @@ const Categories = require("../../models/Categories");
 const Forms = require("../../models/Forms");
 
 exports.getForms = async (req, res) => {
-  const forms = await Formss.find().populate("category");
+  const forms = await Forms.find().populate("category");
   return res.json(forms);
 };
 

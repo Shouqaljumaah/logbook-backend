@@ -15,8 +15,8 @@ passport.use(localStrategy);
 passport.use(jwtStrategy);
 
 app.use("/categaries", categariesRoutes);
-app.use("/recipes", formsRoutes);
-app.use("/api/users", usersRouter);
+app.use("/forms", formsRoutes);
+app.use("/users", usersRouter);
 app.use("/media", express.static(path.join(__dirname, "media")));
 connectDB();
 
