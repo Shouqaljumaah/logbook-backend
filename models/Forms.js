@@ -1,15 +1,12 @@
 const { model, Schema, Types } = require("mongoose");
-const recipeSchema = new Schema({
-  title: {
+const formSchema = new Schema({
+  name: {
     type: String,
   },
-  image: {
-    type: String,
 
-    category: {
-      type: Schema.Types.ObjectId,
-      ref: "Categories",
-    },
+  filed: {
+    type: Schema.Types.ObjectId,
+    ref: "Fileds",
   },
 });
 

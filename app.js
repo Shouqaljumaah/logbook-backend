@@ -5,6 +5,12 @@ const express = require("express");
 const connectDB = require("./database");
 const passport = require("passport");
 const cors = require("cors");
+const { localStrategy, jwtStrategy } = require("./passport");
+
+const formsRoutes = require("./apis/forms/forms.routes");
+const usersRouter = require("./apis/users/users.routes");
+const notificationsRouter = require("./apis/notifications/notifications.routes");
+const formSubmitions = require("./apis/formSubmitions/formSubmitions.routes");
 const app = express();
 const PORT = 8000;
 
@@ -14,9 +20,10 @@ app.use(passport.initialize());
 passport.use(localStrategy);
 passport.use(jwtStrategy);
 
-app.use("/categaries", categariesRoutes);
-app.use("/recipes", formsRoutes);
-app.use("/api/users", usersRouter);
+app.use("/forms", formsRoutes);
+app.use("/users", usersRouter);
+app.use("/notifications", notificationsRouter);
+app.use("/formSubmitions", formSubmitions);
 app.use("/media", express.static(path.join(__dirname, "media")));
 connectDB();
 

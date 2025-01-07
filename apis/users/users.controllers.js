@@ -42,3 +42,11 @@ exports.loginUser = async (req, res) => {
   const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
   res.json({ token });
 };
+exports.getAllUsers = async (req, res) => {
+  try {
+    const users = await Categaries.find();
+    res.json(users);
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+};

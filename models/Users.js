@@ -10,5 +10,6 @@ const UserSchema = new Schema({
     default: "USER",
   },
   password: { type: String },
+  image: { type: String },
 });
 module.exports = model("User", UserSchema);

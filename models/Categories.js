@@ -1,5 +1,5 @@
 const { model, Schema, Types } = require("mongoose");
-const Recipes = require("./Forms");
+const Forms = require("./Forms");
 
 const CategoriesSchema = new Schema({
   title: {
@@ -8,7 +8,7 @@ const CategoriesSchema = new Schema({
   image: {
     type: String,
   },
-  forms: [
+  form: [
     {
       type: Schema.Types.ObjectId,
       ref: "Forms",
