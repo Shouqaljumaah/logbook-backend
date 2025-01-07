@@ -4,10 +4,12 @@ const formSchema = new Schema({
     type: String,
   },
 
-  filed: {
-    type: Schema.Types.ObjectId,
-    ref: "Fileds",
-  },
+  fields: [
+    {
+      type: Schema.Types.ObjectId,
+      ref: "Fields",
+    },
+  ],
 });
 
 module.exports = model("Forms", formSchema);

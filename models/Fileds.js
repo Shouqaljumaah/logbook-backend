@@ -1,5 +1,4 @@
 const { model, Schema, Types } = require("mongoose");
-const FailedsSchema = require("./Fildes");
 const { response } = require("express");
 const { options } = require("../apis/forms/forms.routes");
 
@@ -20,6 +19,9 @@ const FildesSchema = new Schema({
   response: {
     type: String,
   },
+  type: {
+    type: String,
+  },
 });
 
-module.exports = model("Filds", FildesSchema);
+module.exports = model("Fields", FildesSchema);

@@ -5,7 +5,7 @@ const RecordsSchema = new Schema({
 
     filed: {
       type: Schema.Types.ObjectId,
-      ref: "Fildes",
+      ref: "Fields",
     },
   },
 });

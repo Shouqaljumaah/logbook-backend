@@ -1,7 +1,8 @@
+const Fileds = require("../../models/Fileds");
 const Forms = require("../../models/Forms");
 
 exports.getForms = async (req, res) => {
-  const forms = await Forms.find();
+  const forms = await Forms.find().populate("fields");
   return res.json(forms);
 };
 
@@ -35,7 +36,21 @@ exports.updateForm = async (req, res) => {
 
 exports.createForm = async (req, res) => {
   try {
-    const newForms = await Forms.create(req.body);
+    const newForms = await Forms.create({ name: req.body.name });
+    const fields = req.body.fields;
+    const createdFields = [];
+
+    // Create each field and store references
+    for (const field of fields) {
+      const newField = await Fileds.create({ ...field, form: newForms._id });
+      createdFields.push(newField._id);
+    }
+
+    // Add field references to the form
+    await Forms.findByIdAndUpdate(newForms._id, {
+      $push: { fields: { $each: createdFields } },
+    });
+
     res.status(201).json(newForms);
   } catch (e) {
     res.status(500).json({ message: e.message });
