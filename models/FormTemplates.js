@@ -1,5 +1,5 @@
 const { model, Schema, Types } = require("mongoose");
-const formSchema = new Schema({
+const FormTemplatesSchema = new Schema({
   name: {
     type: String,
   },
@@ -12,4 +12,4 @@ const formSchema = new Schema({
   ],
 });
 
-module.exports = model("Forms", formSchema);
+module.exports = model("FormTemplates", FormTemplatesSchema);

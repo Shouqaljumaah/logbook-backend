@@ -5,7 +5,7 @@ const {
   createForm,
   updateForm,
   deleteForm,
-} = require("./forms.controllers");
+} = require("./formTemplates.controllers");
 
 const router = express.Router();
 

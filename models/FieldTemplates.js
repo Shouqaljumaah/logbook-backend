@@ -2,7 +2,7 @@ const { model, Schema, Types } = require("mongoose");
 const { response } = require("express");
 const { options } = require("../apis/forms/forms.routes");
 
-const FildesSchema = new Schema({
+const FieldTemplatesSchema = new Schema({
   name: {
     type: String,
   },
@@ -10,7 +10,7 @@ const FildesSchema = new Schema({
 
   form: {
     type: Schema.Types.ObjectId,
-    ref: "Forms",
+    ref: "FormTemplates",
   },
 
   position: {
@@ -24,4 +24,4 @@ const FildesSchema = new Schema({
   },
 });
 
-module.exports = model("Fields", FildesSchema);
+module.exports = model("FieldTemplates", FieldTemplatesSchema);

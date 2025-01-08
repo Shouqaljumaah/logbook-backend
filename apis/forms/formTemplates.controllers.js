@@ -1,19 +1,19 @@
-const Fileds = require("../../models/Fileds");
-const Forms = require("../../models/Forms");
+const Fileds = require("../../models/FieldTemplates");
+const FormTemplatesSchema = require("../../models/FormTemplates");
 
 exports.getForms = async (req, res) => {
-  const forms = await Forms.find().populate("fields");
+  const forms = await FormTemplatesSchema.find().populate("fields");
   return res.json(forms);
 };
 
 exports.getForm = async (req, res) => {
-  const form = await Forms.findById(req.params.id);
+  const form = await FormTemplatesSchema.findById(req.params.id);
   res.json(form);
 };
 
 exports.deleteForm = async (req, res) => {
   try {
-    await Forms.deleteOne({ _id: req.params.id });
+    await FormTemplatesSchema.deleteOne({ _id: req.params.id });
     res.status(204).end();
   } catch (err) {
     return res.status(404).json({ message: "e" });
@@ -23,7 +23,7 @@ exports.deleteForm = async (req, res) => {
 exports.updateForm = async (req, res) => {
   const { formId } = req.params;
   try {
-    const foundForm = await Forms.findById(formId);
+    const foundForm = await FormTemplatesSchema.findById(formId);
     if (foundForm) {
       await foundForm.updateOne(req.body);
       res.status(200).json({ message: "Form Updated Successfully" });
@@ -37,7 +37,7 @@ exports.updateForm = async (req, res) => {
 
 exports.createForm = async (req, res) => {
   try {
-    const newForms = await Forms.create({ name: req.body.name });
+    const newForms = await FormTemplatesSchema.create({ name: req.body.name });
     const fields = req.body.fields;
     const createdFields = [];
 
