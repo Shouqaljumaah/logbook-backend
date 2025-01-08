@@ -1,5 +1,7 @@
-const Fileds = require("../../models/FieldTemplates");
+
+const FieldTemplates = require("../../models/FieldTemplates");
 const FormTemplatesSchema = require("../../models/FormTemplates");
+const FormTemplates = require("../../models/FormSubmitions");
 
 exports.getForms = async (req, res) => {
   const forms = await FormTemplatesSchema.find().populate("fields");
@@ -35,24 +37,24 @@ exports.updateForm = async (req, res) => {
   }
 };
 
-exports.createForm = async (req, res) => {
+exports.createFormTemplate = async (req, res) => {
   try {
-    const newForms = await FormTemplatesSchema.create({ name: req.body.name });
-    const fields = req.body.fields;
-    const createdFields = [];
+    const newFormsTemplate = await FormTemplatesSchema.create({ name: req.body.name });
+    const fieldTemplates = req.body.fieldTemplates;
+    const createdFieldTemplate = [];
 
     // Create each field and store references
-    for (const field of fields) {
-      const newField = await Fileds.create({ ...field, form: newForms._id });
-      createdFields.push(newField._id);
+    for (const fieldTemplate of fieldTemplates) {
+      const newFieldTemplate = await FieldTemplates.create({ ...fieldTemplate, formTemplate: newFormsTemplate._id });
+      createdFieldTemplate.push(newFieldTemplate._id);
     }
 
     // Add field references to the form
-    await Forms.findByIdAndUpdate(newForms._id, {
-      $push: { fields: { $each: createdFields } },
+    await FormTemplates.findByIdAndUpdate(newFormsTemplate._id, {
+      $push: { fieldTemplates: { $each: createdFieldTemplate } },
     });
 
-    res.status(201).json(newForms);
+    res.status(201).json(newFormsTemplate);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }

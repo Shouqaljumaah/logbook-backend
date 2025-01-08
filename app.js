@@ -20,7 +20,7 @@ app.use(passport.initialize());
 passport.use(localStrategy);
 passport.use(jwtStrategy);
 
-app.use("/forms", formTemplatesRoutes);
+app.use("/formTemplates", formTemplatesRoutes);
 app.use("/users", usersRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/formSubmitions", formSubmitions);

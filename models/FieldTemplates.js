@@ -1,6 +1,5 @@
 const { model, Schema, Types } = require("mongoose");
 const { response } = require("express");
-const { options } = require("../apis/forms/forms.routes");
 
 const FieldTemplatesSchema = new Schema({
   name: {
@@ -8,7 +7,7 @@ const FieldTemplatesSchema = new Schema({
   },
   scaleOptions: [{ type: String }],
 
-  form: {
+  formTemplate: {
     type: Schema.Types.ObjectId,
     ref: "FormTemplates",
   },

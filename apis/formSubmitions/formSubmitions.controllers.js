@@ -1,4 +1,8 @@
 const FormSubmitions = require("../../models/FormSubmitions");
+const FormTemplates = require("../../models/FormTemplates");
+const FieldRecords = require("../../models/FieldRecords");
+
+
 
 exports.getAllFormSubmitions = async (req, res) => {
   const formSubmitions = await FormSubmitions.find();
@@ -18,13 +22,18 @@ exports.deleteFormSubmitions = async (req, res) => {
     return res.status(404).json({ message: "E" });
   }
 };
-exports.updateFormSubmitions = async (req, res) => {
+///////////////////////////////////////////////
+
+exports.reviewFormSubmitions = async (req, res) => {
   const { formSubmitionsId } = req.params;
+  const recordIds = req.body.fieldRecords.map(record => record._id);
   try {
-    const foundFormSubmitions = await FormSubmitions.findById(formSubmitionsId);
+    const foundFormSubmitions = await FormSubmitions.findByIdAndUpdate(formSubmitionsId,{
+      $push: { recods: { $each: recordIds } }
+    });
+    const updatedFormSubmition = await FormSubmitions.findById(formSubmitionsId).populate('recods');
     if (foundFormSubmitions) {
-      await foundForm.updateOne(req.body);
-      res.status(200).json({ message: " Updated Successfully" });
+      res.status(200).json(updatedFormSubmition);
     } else {
       res.status(404).json({ message: " Not Found" });
     }
@@ -33,15 +42,68 @@ exports.updateFormSubmitions = async (req, res) => {
   }
 };
 
-exports.createFormSubmitions = async (req, res) => {
-  try {
-    const newFormSubmitions = await FormSubmitions.create(req.body);
-    // create recods with the filedId and newFormSubmitionsId
+
+
+ // create recods with the filedId and newFormSubmitionsId
     // each field has many reord
     // each recod belong to a form submition
 
-    res.status(201).json(newFormSubmitions);
-  } catch (e) {
-    res.status(500).json({ message: e.message });
-  }
-};
+
+    exports.createFormSubmition = async (req, res) => {
+      try {
+
+        // this message shown if i not exists formtemplate first  "message": "Cannot access 'formTemplate' before initialization", so i said find this template by id if not found show error
+      // 1. Validate that formtemplate exists first
+      const formTemplateDoc = await FormTemplates.findById(req.body.formtemplate);
+      if (!formTemplateDoc) {
+        return res.status(404).json({ 
+          message: `FormTemplate with ID ${req.body.formtemplate} not found` 
+        });
+      }
+      
+      
+        // First create the form submission
+        const newFormSubmitions = await FormSubmitions.create({
+          formtemplate: formTemplateDoc._id, // i change it because he can't find id of formtemplate, so i said Use the found template
+          resident: req.body.resident,
+          tutor: req.body.tutor,
+          submissionDate: new Date(req.body.submissionDate),
+          fieldRecord: []
+        });
+    
+        // Create records for each field
+   
+        const recordPromises = [
+        // For name
+        FieldRecords.create({
+          value: req.body.name.toString()  // Convert to string
+        }),
+        // For date
+        FieldRecords.create({
+          value: req.body.date.toString()  // Convert to string
+        })
+      ];
+    
+        // Wait for all records to be created
+        const records = await Promise.all(recordPromises);
+        const recordIds = records.map(record => record._id);
+    
+        // Update the form submission with the record IDs
+        await FormSubmitions.findByIdAndUpdate(newFormSubmitions._id, {
+          $push: { fieldRecord: { $each: recordIds } }
+        });
+    
+        // Fetch the updated form submission with populated records
+        const updatedFormSubmition = await FormSubmitions.findById(newFormSubmitions._id)
+          .populate('fieldRecord')
+          .populate('formTemplate')
+          .populate('resident')
+          .populate('tutor');
+    
+        res.status(201).json(updatedFormSubmition);
+      } catch (e) {
+        res.status(500).json({ message: e.message });
+      }
+    };
+
+ 

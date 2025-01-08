@@ -2,8 +2,8 @@ const express = require("express");
 const {
   getAllFormSubmitions,
   getFormSubmitions,
-  createFormSubmitions,
-  updateFormSubmitions,
+  createFormSubmition,
+  reviewFormSubmitions,
   deleteFormSubmitions,
 } = require("./formSubmitions.controllers");
 
@@ -11,8 +11,8 @@ const router = express.Router();
 
 router.get("/", getAllFormSubmitions); //Get all
 router.get("/:id", getFormSubmitions); //Get  by id
-router.post("/", createFormSubmitions); //add
-router.put("/:formSubmitionsId", updateFormSubmitions); //uptate
+router.post("/", createFormSubmition); //add
+router.put("/:formSubmitionsId", reviewFormSubmitions); //uptate
 router.delete("/:formSubmitionsId", deleteFormSubmitions); //Delete
 
 module.exports = router;
