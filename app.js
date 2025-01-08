@@ -7,7 +7,7 @@ const passport = require("passport");
 const cors = require("cors");
 const { localStrategy, jwtStrategy } = require("./passport");
 
-const formsRoutes = require("./apis/forms/forms.routes");
+const formTemplatesRoutes = require("./apis/forms/formTemplates.routes");
 const usersRouter = require("./apis/users/users.routes");
 const notificationsRouter = require("./apis/notifications/notifications.routes");
 const formSubmitions = require("./apis/formSubmitions/formSubmitions.routes");
@@ -20,7 +20,7 @@ app.use(passport.initialize());
 passport.use(localStrategy);
 passport.use(jwtStrategy);
 
-app.use("/forms", formsRoutes);
+app.use("/forms", formTemplatesRoutes);
 app.use("/users", usersRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/formSubmitions", formSubmitions);
