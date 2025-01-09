@@ -26,12 +26,20 @@ exports.deleteFormSubmitions = async (req, res) => {
 
 exports.reviewFormSubmitions = async (req, res) => {
   const { formSubmitionsId } = req.params;
-  const recordIds = req.body.fieldRecords.map(record => record._id);
+  const fieldRecords = req.body.fieldRecords
+  const createdFieldRecord = []
+
+  for (const record of fieldRecords) {
+    const newFieldRecord = await FieldRecords.create({ ...record, formSubmitions: formSubmitionsId });
+   
+        createdFieldRecord.push(newFieldRecord._id);
+  }
+
   try {
     const foundFormSubmitions = await FormSubmitions.findByIdAndUpdate(formSubmitionsId,{
-      $push: { recods: { $each: recordIds } }
+      $push: { fieldRecord: { $each: createdFieldRecord } }
     });
-    const updatedFormSubmition = await FormSubmitions.findById(formSubmitionsId).populate('recods');
+    const updatedFormSubmition = await FormSubmitions.findById(formSubmitionsId).populate('fieldRecord');
     if (foundFormSubmitions) {
       res.status(200).json(updatedFormSubmition);
     } else {
@@ -51,7 +59,8 @@ exports.reviewFormSubmitions = async (req, res) => {
 
     exports.createFormSubmition = async (req, res) => {
       try {
-
+const fieldRecords = req.body.fieldRecords
+const createdFieldRecord = []
         // this message shown if i not exists formtemplate first  "message": "Cannot access 'formTemplate' before initialization", so i said find this template by id if not found show error
       // 1. Validate that formtemplate exists first
       const formTemplateDoc = await FormTemplates.findById(req.body.formtemplate);
@@ -73,24 +82,18 @@ exports.reviewFormSubmitions = async (req, res) => {
     
         // Create records for each field
    
-        const recordPromises = [
-        // For name
-        FieldRecords.create({
-          value: req.body.name.toString()  // Convert to string
-        }),
-        // For date
-        FieldRecords.create({
-          value: req.body.date.toString()  // Convert to string
-        })
-      ];
+         // Create each field and store references
+    for (const record of fieldRecords) {
+      const newFieldRecord = await FieldRecords.create({ ...record, formSubmitions: newFormSubmitions._id });
+     
+          createdFieldRecord.push(newFieldRecord._id);
+    }
     
-        // Wait for all records to be created
-        const records = await Promise.all(recordPromises);
-        const recordIds = records.map(record => record._id);
+       
     
         // Update the form submission with the record IDs
         await FormSubmitions.findByIdAndUpdate(newFormSubmitions._id, {
-          $push: { fieldRecord: { $each: recordIds } }
+          $push: { fieldRecord: { $each: createdFieldRecord } }
         });
     
         // Fetch the updated form submission with populated records

@@ -12,7 +12,7 @@ const router = express.Router();
 router.get("/", getAllFormSubmitions); //Get all
 router.get("/:id", getFormSubmitions); //Get  by id
 router.post("/", createFormSubmition); //add
-router.put("/:formSubmitionsId", reviewFormSubmitions); //uptate
+router.put("/:formSubmitionsId/review", reviewFormSubmitions); //uptate
 router.delete("/:formSubmitionsId", deleteFormSubmitions); //Delete
 
 module.exports = router;

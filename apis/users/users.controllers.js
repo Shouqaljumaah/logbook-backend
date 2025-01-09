@@ -6,7 +6,6 @@ const { JWT_SECRET, JWT_EXPIRATION_MS } = require("../../key");
 exports.signupUser = async (req, res) => {
   const saltRounds = 10;
   req.body.password = await bcrypt.hash(req.body.password, saltRounds);
-
   try {
     const user = User(req.body);
     await user.save();
@@ -22,6 +21,13 @@ exports.signupUser = async (req, res) => {
     res.status(400).json(e.message);
   }
 };
+exports.changePassword = async (req, res) => {
+  const user = await User.findById(req.body.id);
+  user.password = req.body.password;
+  await user.save();
+  res.status(200).json();
+};
+
 exports.logoutUser = async (req, res) => {
   const users = await User.find({ session: `${req.body.token}` });
   if (users.length > 0) {
