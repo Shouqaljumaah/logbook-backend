@@ -1,12 +1,12 @@
 const express = require("express");
-const router = express.Router();
-
 const {
   createNotification,
   getNotifications,
   markAsRead,
   deleteNotification,
 } = require("./notifications.controllers");
+
+const router = express.Router();
 
 router.post("/notifications", createNotification);
 

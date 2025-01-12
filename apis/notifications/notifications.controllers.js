@@ -1,25 +1,6 @@
-// const sendNotification = (message) => {
-//   console.log("Notification: ", message);
-// };
-
-// const createPost = (req, res) => {
-//   const { title } = req.body;
-//   // Send a notification to the user
-//   sendNotification(`New post created with title: ${title}`);
-
-//   return res.status(201).json({
-//     message: "Post Created Successfully",
-//     post,
-//   });
-// };
-
-// module.exports = {
-//   createPost,
-// };
-
 const Notification = require("../../models/Notifications");
 
-const createNotification = async (req, res) => {
+exports.createNotification = async (req, res) => {
   const { userId, message, type } = req.body;
 
   try {
@@ -37,7 +18,7 @@ const createNotification = async (req, res) => {
 };
 
 // Get all notifications for a specific user
-const getNotifications = async (req, res) => {
+exports.getNotifications = async (req, res) => {
   const { userId } = req.params;
 
   try {
@@ -51,7 +32,7 @@ const getNotifications = async (req, res) => {
 };
 
 // Mark notification as read
-const markAsRead = async (req, res) => {
+exports.markAsRead = async (req, res) => {
   const { notificationId } = req.params;
 
   try {
@@ -69,18 +50,11 @@ const markAsRead = async (req, res) => {
   }
 };
 
-const deleteNotification = async (req, res) => {
+exports.deleteNotification = async (req, res) => {
   try {
     await Notifications.deleteOne({ _id: req.params.id });
     res.status(204).end();
   } catch (err) {
     return res.status(404).json({ message: "e" });
   }
-};
-
-module.exports = {
-  createNotification,
-  getNotifications,
-  markAsRead,
-  deleteNotification,
 };

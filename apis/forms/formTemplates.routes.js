@@ -12,7 +12,7 @@ const router = express.Router();
 router.get("/", getForms); //Get all formss
 router.get("/:id", getForm); //Get form by id
 router.post("/", createForm); //add form
-router.put("/:formId", updateForm); //Edit form
-router.delete("/:formId", deleteForm); //Delete form
+router.put("/:formTemplatesId", updateForm); //Edit form
+router.delete("/:formTemplatesId", deleteForm); //Delete form
 
 module.exports = router;

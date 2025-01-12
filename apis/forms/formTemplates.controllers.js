@@ -1,4 +1,4 @@
-const Fileds = require("../../models/FieldTemplates");
+const FieldTemplates = require("../../models/FieldTemplates");
 const FormTemplatesSchema = require("../../models/FormTemplates");
 
 exports.getForms = async (req, res) => {
@@ -43,7 +43,10 @@ exports.createForm = async (req, res) => {
 
     // Create each field and store references
     for (const field of fields) {
-      const newField = await Fileds.create({ ...field, form: newForms._id });
+      const newField = await FieldTemplates.create({
+        ...field,
+        form: newForms._id,
+      });
       createdFields.push(newField._id);
     }
 
