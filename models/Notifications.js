@@ -1,21 +1,27 @@
-const mongoose = require("mongoose");
+const { model, Schema, Types } = require("mongoose");
 
-// Define the Notification schema
-const notificationSchema = new mongoose.Schema(
+const NotificationSchema = new Schema(
   {
-    userId: { type: String, required: true }, // user who the notification is for
-    message: { type: String, required: true },
+    userId: {
+      type: String,
+    }, // user who the notification is for
+    message: {
+      type: String,
+    },
     type: {
       type: String,
       enum: ["comment", "mention"],
-      required: true,
     },
-    isRead: { type: Boolean, default: false },
-    createdAt: { type: Date, default: Date.now },
+    isRead: {
+      type: Boolean,
+      default: false,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { timestamps: true }
 );
 
-const Notification = mongoose.model("Notification", notificationSchema);
-
-module.exports = Notification;
+module.exports = model("Notification", NotificationSchema);
