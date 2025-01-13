@@ -1,15 +1,15 @@
 const { model, Schema, Types } = require("mongoose");
 const FormsSubmitionsSchema = new Schema({
-  recods: [
+  fieldRecord: [
     {
       type: Schema.Types.ObjectId,
-      ref: "Records",
+      ref: "FieldRecords",
     },
   ],
 
-  form: {
+  formTemplate: {
     type: Schema.Types.ObjectId,
-    ref: "Forms",
+    ref: "FormTemplates",
   },
   resident: {
     type: Schema.Types.ObjectId,

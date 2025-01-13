@@ -1,17 +1,14 @@
 const { model, Schema, Types } = require("mongoose");
 
-const FormTemplatesSchema = new Schema({
-  name: {
+const fieldRecordsSchema = new Schema({
+  value: {
     type: String,
-  },
 
-  fieldTemplates: [
-    {
+    fieldTemplate: {
       type: Schema.Types.ObjectId,
       ref: "FieldTemplates",
     },
-  ],
+  },
 });
 
-
-module.exports = model("FormTemplates", FormTemplatesSchema);
+module.exports = model("FieldRecords", fieldRecordsSchema);

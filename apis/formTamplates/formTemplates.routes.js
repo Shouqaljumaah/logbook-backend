@@ -1,18 +1,20 @@
 const express = require("express");
+const router = express.Router();
 const {
   getForms,
-  getForm,
-  createForm,
+  getForm,createFormTemplate,
   updateForm,
   deleteForm,
 } = require("./formTemplates.controllers");
 
-const router = express.Router();
+
+
 
 router.get("/", getForms); //Get all formss
 router.get("/:id", getForm); //Get form by id
-router.post("/", createForm); //add form
-router.put("/:formTemplatesId", updateForm); //Edit form
-router.delete("/:formTemplatesId", deleteForm); //Delete form
+router.post("/", createFormTemplate); //add form
+router.put("/:formId", updateForm); //Edit form
+router.delete("/:formId", deleteForm); //Delete form
+
 
 module.exports = router;

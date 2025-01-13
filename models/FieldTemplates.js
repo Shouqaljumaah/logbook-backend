@@ -8,7 +8,7 @@ const FieldTemplatesSchema = new Schema({
   },
   scaleOptions: [{ type: String }],
 
-  form: {
+  formTemplate: {
     type: Schema.Types.ObjectId,
     ref: "FormTemplates",
   },
@@ -19,8 +19,8 @@ const FieldTemplatesSchema = new Schema({
   response: {
     type: String,
   },
-  type: {
-    type: String,
+  section: {
+    type: String, // 1-10
   },
 });
 

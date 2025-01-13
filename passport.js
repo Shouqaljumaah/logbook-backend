@@ -25,15 +25,30 @@ exports.localStrategy = new LocalStrategy(
 );
 
 const jwtVerify = async (jwtPayload, done) => {
-  if (DataTransfer.now() > jwtPayload.exp) {
-    console.log("jwt expired");
-    return done(null, false);
-  }
   try {
+    console.log("JWT Payload in verify:", jwtPayload); // Debug log
+    
+    // Check token expiration 
+    if (jwtPayload.role === 'admin') {
+      if (Date.now() > jwtPayload.exp) {
+        console.log("Admin jwt expired");
+        return done(null, false);
+      }
+    }
+
+    // Find user by ID
     const user = await Users.findById(jwtPayload.id);
-    done(null, user);
+    console.log("Found user:", user); // Debug log
+
+    if (!user) {
+      console.log("No user found with ID:", jwtPayload.id);
+      return done(null, false);
+    }
+
+    return done(null, user);
   } catch (error) {
-    done(error);
+    console.error("JWT Verify error:", error);
+    return done(error);
   }
 };
 
