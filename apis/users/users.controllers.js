@@ -348,7 +348,8 @@ exports.updateUser = async (req, res) => {
             {
                 $set: {
                     username: req.body.username,
-                    email: req.body.email
+                    email: req.body.email,
+                    phone: req.body.phone
                 }
             },
             { new: true }  // Return the updated document

@@ -28,10 +28,12 @@ const jwtVerify = async (jwtPayload, done) => {
   try {
     console.log("JWT Payload in verify:", jwtPayload); // Debug log
     
-    // Check token expiration
-    if (Date.now() > jwtPayload.exp) {
-      console.log("jwt expired");
-      return done(null, false);
+    // Check token expiration 
+    if (jwtPayload.role === 'admin') {
+      if (Date.now() > jwtPayload.exp) {
+        console.log("Admin jwt expired");
+        return done(null, false);
+      }
     }
 
     // Find user by ID
