@@ -4,6 +4,9 @@ const FormTemplatesSchema = new Schema({
   name: {
     type: String,
   },
+  scaleDescription: {
+    type: String,
+  },
 
   fieldTemplates: [
     {

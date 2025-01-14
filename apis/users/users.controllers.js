@@ -44,7 +44,8 @@ exports.signupUser = async (req, res) => {
       password: hashedPassword,
       role: req.body.role,
       isFirstLogin: true,
-      email: req.body.email
+      email: req.body.email,
+      phone: req.body.phone
     });
 
     res.status(201).json({ 
@@ -53,7 +54,8 @@ exports.signupUser = async (req, res) => {
         username: user.username,
         role: user.role,
         _id: user._id,
-        email: user.email
+        email: user.email,
+        phone: user.phone
       }
     });
 
