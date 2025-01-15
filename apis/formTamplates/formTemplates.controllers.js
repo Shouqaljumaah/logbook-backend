@@ -52,7 +52,7 @@ exports.deleteForm = async (req, res) => {
 exports.updateForm = async (req, res) => {
   const { formId } = req.params;
   try {
-    const { name, scaleDescription, fieldTemplates } = req.body;
+    const {formName, score, scaleDescription, fieldTemplates } = req.body;
 
     // Find and update the form
     const form = await FormTemplatesSchema.findById(formId);
@@ -61,7 +61,8 @@ exports.updateForm = async (req, res) => {
     }
 
     // Update form fields
-    form.name = name;
+    form.formName = formName;
+    form.score = score;
     form.scaleDescription = scaleDescription;
 
     // Update or create field templates
@@ -112,7 +113,8 @@ exports.createFormTemplate = async (req, res) => {
   try {
     // Create form with scaleDescription
     const newFormsTemplate = await FormTemplatesSchema.create({ 
-      name: req.body.name,
+      formName: req.body.formName,
+      score: req.body.score,
       scaleDescription: req.body.scaleDescription
     });
     const fieldTemplates = req.body.fieldTemplates;

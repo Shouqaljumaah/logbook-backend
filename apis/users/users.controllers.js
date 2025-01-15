@@ -196,6 +196,10 @@ exports.changePassword = async (req, res) => {
 };
 
 
+exports.tutorList = async (req, res) => {
+  const tutors = await User.find({ role: 'tutor' }, '-password');
+  res.json(tutors);
+};
 
 exports.updateUserImage = async (req, res) => {
   try {
