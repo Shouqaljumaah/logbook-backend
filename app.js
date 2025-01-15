@@ -12,6 +12,7 @@ const usersRouter = require("./apis/users/users.routes");
 const notificationsRouter = require("./apis/notifications/notifications.routes");
 const formSubmitionsRouter = require("./apis/formSubmitions/formSubmitions.routes");
 const announcementsRouter = require("./apis/announcements/announcements.routes");
+const fieldTemplateRouter = require("./apis/fieldTemplate/routes");
 const app = express();
 const PORT = 8000;
 
@@ -21,6 +22,7 @@ app.use(passport.initialize());
 passport.use(localStrategy);
 passport.use(jwtStrategy);
 
+app.use("/fieldTemplate", fieldTemplateRouter)
 app.use("/formTemplates", formTemplatesRouter);
 app.use("/users", usersRouter);
 app.use("/notifications", notificationsRouter);

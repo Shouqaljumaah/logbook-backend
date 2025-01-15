@@ -4,6 +4,20 @@ const { response } = require("express");
 const FieldTemplatesSchema = new Schema({
   name: {
     type: String,
+    required: true,
+  },
+  hasDetails: {
+    type: Boolean,
+    default: false
+  },
+  details: {
+    type: String,
+    default: ''
+  },
+  type: {
+    type: String,
+    required: true,
+    enum: ['text', 'select', 'scale', 'date', 'textArea' ] // Define allowed types
   },
   scaleOptions: [{ type: String }],
 
@@ -21,6 +35,9 @@ const FieldTemplatesSchema = new Schema({
   section: {
     type: String, // 1-10
   },
+  options: [{ type: String }],
+  
+
 });
 
 module.exports = model("FieldTemplates", FieldTemplatesSchema);

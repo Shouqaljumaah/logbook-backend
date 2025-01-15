@@ -7,7 +7,7 @@ const {
   logoutUser, getAllUsers,
   changePassword, updateUserImage,
   createAdmin, deleteUser,
-  updateUser
+  updateUser, tutorList
 } = require("./users.controllers");
 
 
@@ -24,5 +24,6 @@ router.put("/change-password", changePassword);
 router.put("/update-image/:userId", upload.single("image"), updateUserImage);
 router.put('/:id', passport.authenticate("jwt", { session: false }), updateUser);
 router.delete('/:id', passport.authenticate("jwt", { session: false }), deleteUser);
+router.get('/tutor-list', tutorList);
 
 module.exports = router;

@@ -1,4 +1,7 @@
 const express = require("express");
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
+
 const {
   getAllAnnouncements,
   createAnnouncement,
@@ -6,8 +9,8 @@ const {
 } = require("./announcements.controllers");
 
 const router = express.Router();
-router.get("/", getAllAnnouncements); //Get all
-router.post("/", createAnnouncement); //add
-router.delete("/:announcementId", deleteAnnouncement); //Delete
+router.get("/", getAllAnnouncements);
+router.post("/", upload.single('file'), createAnnouncement);  // Add multer middleware
+router.delete("/:announcementId", deleteAnnouncement);
 
 module.exports = router;
