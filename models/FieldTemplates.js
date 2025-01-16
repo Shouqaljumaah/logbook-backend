@@ -16,7 +16,7 @@ const FieldTemplatesSchema = new Schema({
   type: {
     type: String,
     required: true,
-    enum: ['text', 'select', 'scale', 'date', 'textArea' ] // Define allowed types
+    enum: ['text', 'select', 'scale', 'date', 'textArea', 'checkbox' ] // Define allowed types
   },
   scaleOptions: [{ type: String }],
 
