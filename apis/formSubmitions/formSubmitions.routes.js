@@ -9,7 +9,7 @@ const {
 
 const router = express.Router();
 
-router.get("/", getAllFormSubmitions); //Get all
+router.get("/:userId", getAllFormSubmitions); //Get all
 router.get("/:id", getFormSubmitions); //Get  by id
 router.post("/", createFormSubmition); //add
 router.put("/:formSubmitionsId/review", reviewFormSubmitions); //uptate
