@@ -1,4 +1,30 @@
 const Announcement = require("../../models/Announcements");
+const multer = require('multer');
+
+// Configure multer for image upload
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/announcements/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Not an image! Please upload an image.'));
+    }
+  }
+});
+
+exports.uploadImage = upload.single('image');
 
 // Get all announcements
 exports.getAllAnnouncements = async (req, res) => {
@@ -13,35 +39,20 @@ exports.getAllAnnouncements = async (req, res) => {
 // Create new announcement
 exports.createAnnouncement = async (req, res) => {
   try {
-    const { title, body, date } = req.body;
-    
-    // Validate required fields
-    if (!title || !body) {
-      return res.status(400).json({ 
-        message: "Title and body are required" 
-      });
-    }
+    const { title, content } = req.body;
+    const file = req.file ? req.file.filename : null;
 
-    // Create new announcement
-    const newAnnouncement = new Announcement({
+    const announcement = new Announcement({
       title,
-      body,
-      date: date || new Date(),
-      file: req.file ? req.file.path : undefined
+      content,
+      file
     });
 
-    // Save to database
-    const savedAnnouncement = await newAnnouncement.save();
-    console.log('Saved announcement:', savedAnnouncement); // Debug log
-
-    res.status(201).json(savedAnnouncement);
-
-  } catch (err) {
-    console.error('Create announcement error:', err);
-    res.status(500).json({ 
-      message: "Failed to create announcement",
-      error: err.message 
-    });
+    await announcement.save();
+    res.status(201).json(announcement);
+  } catch (error) {
+    console.error('Error creating announcement:', error);
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -68,6 +79,23 @@ exports.deleteAnnouncement = async (req, res) => {
       message: "Failed to delete announcement",
       error: err.message 
     });
+  }
+};
+
+// Get announcement
+exports.getAnnouncement = async (req, res) => {
+  try {
+    const announcement = await Announcement.findById(req.params.id);
+    
+    if (!announcement) {
+      return res.status(404).json({ message: 'Announcement not found' });
+    }
+
+    console.log('Sending announcement:', announcement); // Debug log
+    res.json(announcement);
+  } catch (error) {
+    console.error('Error getting announcement:', error);
+    res.status(500).json({ message: error.message });
   }
 };
 

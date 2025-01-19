@@ -6,6 +6,10 @@ const fs = require('fs');
 const path = require('path');
 const upload = require("../../multer");
 
+exports.getUser = async (req, res) => {
+  const user = await User.findById(req.params.id, '-password');
+  res.json(user);
+};
 
 exports.signupUser = async (req, res) => {
   try {
@@ -23,19 +27,19 @@ exports.signupUser = async (req, res) => {
     // Remove spaces from username
     const username = req.body.username.replace(/\s+/g, '');
     const password = req.body.password;
-    const role = req.body.role; // Single role from request
+    const roles = req.body.roles; // Array of roles from request
     const email = req.body.email?.trim();
     const phone = req.body.phone?.trim();
 
     // Validate required fields
-    if (!username || !password || !role) {
+      if (!username || !password || !roles) {
       return res.status(400).json({ 
-        message: "Username, password and role are required" 
+        message: "Username, password and roles are required" 
       });
     }
 
     // Validate role
-    if (!['resident', 'tutor'].includes(role)) {
+    if (!['resident', 'tutor'].includes(roles)) {
       return res.status(400).json({ 
         message: "Role must be either 'resident' or 'tutor'" 
       });
@@ -57,7 +61,7 @@ exports.signupUser = async (req, res) => {
     const user = await User.create({
       username,
       password: hashedPassword,
-      roles: [role], // Store role in an array
+      roles: [roles], // Store role in an array
       isFirstLogin: true,
       email,
       phone
@@ -148,17 +152,17 @@ exports.loginUser = async (req, res) => {
     const payload = {
       id: user.id,
       username: user.username,
-      role: user.roles,
+      roles: user.roles,
       exp: Date.now() + parseInt(JWT_EXPIRATION_MS),
     };
     const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
-    console.log("user", user.role);
+    console.log("user", user.roles);
     res.json({ 
       token,
       user: {
         id: user._id,
         username: user.username,
-        role: user.role
+        roles: user.roles
       },
       requirePasswordChange: false 
     });
@@ -215,9 +219,9 @@ exports.changePassword = async (req, res) => {
 
 exports.tutorList = async (req, res) => {
     try {
-        // Find all users who are tutors (including those who are also admins)
+        // Find all users who have tutor role, regardless of other roles
         const tutors = await User.find({ 
-            role: 'tutor'
+            roles: 'tutor'  // Changed from ['tutor'] to 'tutor' to match any array containing 'tutor'
         }, '-password');
 
         // Add isAdmin flag to response
@@ -300,7 +304,7 @@ exports.createAdmin = async (req, res) => {
       message: "Admin created successfully",
       admin: {
         username: admin.username,
-        role: admin.role,
+        role: admin.roles,
         _id: admin._id
       }
     });
@@ -429,3 +433,19 @@ exports.updateUser = async (req, res) => {
 //   saveToken(response.token);
 //   navigateToHome();
 // }
+
+// Get all residents
+exports.getResidents = async (req, res) => {
+  try {
+    console.log('Fetching residents...'); // Debug log
+    const residents = await User.find({ roles: 'resident' }) // Note: changed role to roles to match schema
+      .select('username email')
+      .lean();
+    
+    console.log('Found residents:', residents); // Debug log
+    res.json(residents);
+  } catch (error) {
+    console.error('Error getting residents:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

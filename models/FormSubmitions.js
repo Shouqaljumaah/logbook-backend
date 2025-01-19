@@ -1,24 +1,34 @@
-const { model, Schema, Types } = require("mongoose");
-const FormsSubmitionsSchema = new Schema({
-  fieldRecord: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "FieldRecords",
-    },
-  ],
+const mongoose = require('mongoose');
 
-  formTemplate: {
-    type: Schema.Types.ObjectId,
-    ref: "FormTemplates",
+const formSubmitionSchema = new mongoose.Schema({
+  formtemplate: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FormTemplate',
+    required: true
   },
   resident: {
-    type: Schema.Types.ObjectId,
-    ref: "User",
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
   tutor: {
-    type: Schema.Types.ObjectId,
-    ref: "User",
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
+  submissionDate: {
+    type: Date,
+    required: true
+  },
+  fieldRecord: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FieldRecord'
+  }],
+  status: {
+    type: String,
+    enum: ['pending', 'reviewed', 'approved', 'rejected'],
+    default: 'pending'
+  }
 });
 
-module.exports = model("FormSubmitions", FormsSubmitionsSchema);
+module.exports = mongoose.model('FormSubmition', formSubmitionSchema);

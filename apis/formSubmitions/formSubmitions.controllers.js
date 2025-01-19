@@ -4,8 +4,8 @@ const FieldRecords = require("../../models/FieldRecords");
 
 exports.getAllFormSubmitions = async (req, res) => {
   const { userId } = req.params;
-  const { role } = req.query;
-  if (role === "resident") {
+  const { roles } = req.query;
+  if (roles === "resident") {
     const formSubmitions = await FormSubmitions.find({
       resident: userId,
     });
