@@ -36,4 +36,3 @@ exports.deleteFieldTemplate = async (req, res) => {
         });
     }
 };
-

@@ -29,6 +29,7 @@ app.use("/notifications", notificationsRouter);
 app.use("/formSubmitions", formSubmitionsRouter);
 app.use("/announcements", announcementsRouter);
 app.use("/media", express.static(path.join(__dirname, "media")));
+app.use('/api/users', require('./apis/users/users.routes'));// changes done here 
 connectDB();
 
 app.listen(PORT, () => {

@@ -14,45 +14,60 @@ exports.signupUser = async (req, res) => {
     console.log("Admin user:", adminUser); // Debug log
 
     // Check if user exists and is admin
-    if (!adminUser || adminUser.role !== 'admin') {
+    if (!adminUser || !adminUser.roles.includes('admin')) {
       return res.status(403).json({ 
         message: "Only admins can create new users" 
       });
     }
 
+    // Remove spaces from username
+    const username = req.body.username.replace(/\s+/g, '');
+    const password = req.body.password;
+    const role = req.body.role; // Single role from request
+    const email = req.body.email?.trim();
+    const phone = req.body.phone?.trim();
+
     // Validate required fields
-    if (!req.body.username || !req.body.password || !req.body.role) {
+    if (!username || !password || !role) {
       return res.status(400).json({ 
         message: "Username, password and role are required" 
       });
     }
 
     // Validate role
-    if (!['resident', 'tutor'].includes(req.body.role)) {
+    if (!['resident', 'tutor'].includes(role)) {
       return res.status(400).json({ 
         message: "Role must be either 'resident' or 'tutor'" 
       });
     }
 
+    // Check if username already exists
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ 
+        message: "Username already exists" 
+      });
+    }
+
     // Hash password
     const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(req.body.password, saltRounds);
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create user
+    // Create user with roles array
     const user = await User.create({
-      username: req.body.username,
+      username,
       password: hashedPassword,
-      role: req.body.role,
+      roles: [role], // Store role in an array
       isFirstLogin: true,
-      email: req.body.email,
-      phone: req.body.phone
+      email,
+      phone
     });
 
     res.status(201).json({ 
       message: "User created successfully",
       user: {
         username: user.username,
-        role: user.role,
+        roles: user.roles,
         _id: user._id,
         email: user.email,
         phone: user.phone
@@ -60,7 +75,7 @@ exports.signupUser = async (req, res) => {
     });
 
   } catch (e) {
-    console.error("Error:", e); // Debug log
+    console.error("Error:", e);
     if (e.code === 11000) {
       res.status(400).json({ message: "Username already exists" });
     } else {
@@ -117,7 +132,8 @@ exports.getAllUsers = async (req, res) => {
 exports.loginUser = async (req, res) => {
   try {
     const { user } = req;
-    
+    console.log("user", user.username);
+
     // Check if password needs to be changed (first login)
     if (user.isFirstLogin) {
       return res.status(200).json({ 
@@ -132,16 +148,17 @@ exports.loginUser = async (req, res) => {
     const payload = {
       id: user.id,
       username: user.username,
-      role: user.role,
+      role: user.roles,
       exp: Date.now() + parseInt(JWT_EXPIRATION_MS),
     };
     const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
+    console.log("user", user.roles);
     res.json({ 
       token,
       user: {
         id: user._id,
         username: user.username,
-        role: user.role
+        role: user.roles
       },
       requirePasswordChange: false 
     });
@@ -195,10 +212,28 @@ exports.changePassword = async (req, res) => {
   }
 };
 
-
+// changes done here 
 exports.tutorList = async (req, res) => {
-  const tutors = await User.find({ role: 'tutor' }, '-password');
-  res.json(tutors);
+  try {
+    // Find all users who are tutors (including those who are also admins)
+    const tutors = await User.find({ 
+      roles: { $in: ['tutor', 'admin'] }
+    }, '-password');
+
+    // // Add isAdmin flag to response
+    // const tutorsWithAdminStatus = tutors.map(tutor => ({
+    //   ...tutor.toObject(),
+    //   isAdmin: tutor.roles?.includes('admin')  // Added optional chaining
+    // }));
+
+    res.json(tutors);
+  } catch (error) {
+    console.error('Error fetching tutors:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch tutors',
+      error: error.message 
+    });
+  }
 };
 
 exports.updateUserImage = async (req, res) => {
@@ -294,8 +329,8 @@ exports.deleteUser = async (req, res) => {
             });
         }
 
-        if (adminUser.role !== 'admin') {
-            console.log("User is not admin. Role:", adminUser.role); // Debug log
+        if (!adminUser.roles.includes('admin')) { // Check roles array instead of role property
+            console.log("User is not admin. Roles:", adminUser.roles); // Debug log
             return res.status(403).json({ 
                 message: "Only admins can delete users" 
             });
@@ -325,8 +360,7 @@ exports.deleteUser = async (req, res) => {
         console.error('Error in deleteUser:', error);
         res.status(500).json({ 
             message: "Error deleting user",
-            error: error.message,
-            stack: error.stack // Include stack trace for debugging
+            error: error.message
         });
     }
 };

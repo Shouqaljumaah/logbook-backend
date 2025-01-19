@@ -4,7 +4,7 @@ const FormTemplatesSchema = require("../../models/FormTemplates");
 exports.getForms = async (req, res) => {
   try {
     const forms = await FormTemplatesSchema.find().populate("fieldTemplates");
-    console.log('Found forms:', forms); // Debug log
+    // console.log('Found forms:', forms); // Debug log
     return res.json(forms);
   } catch (error) {
     console.error('Error getting forms:', error);
@@ -13,7 +13,7 @@ exports.getForms = async (req, res) => {
 };
 
 exports.getForm = async (req, res) => {
-  const form = await FormTemplatesSchema.findById(req.params.id);
+  const form = await FormTemplatesSchema.findById(req.params.id).populate("fieldTemplates");
   res.json(form);
 };
 
@@ -125,8 +125,11 @@ exports.createFormTemplate = async (req, res) => {
       const newFieldTemplate = await FieldTemplates.create({ 
         ...fieldTemplate, 
         formTemplate: newFormsTemplate._id,
-        options: fieldTemplate.options || [], // Save options
-        scaleOptions: fieldTemplate.scaleOptions || [] // Save scale options
+        options: (fieldTemplate.type === 'select' || fieldTemplate.type === 'checkbox') 
+          ? fieldTemplate.options || [] 
+          : [], // Save options for both select and checkbox
+        scaleOptions: fieldTemplate.type === 'scale' ? fieldTemplate.scaleOptions || [] : [],
+        selectedOptions: fieldTemplate.type === 'checkbox' ? [] : undefined // Initialize empty selected options for checkboxes
       });
      
       createdFieldTemplate.push(newFieldTemplate._id);
@@ -141,5 +144,3 @@ exports.createFormTemplate = async (req, res) => {
     res.status(500).json({ message: e.message });
   }
 };
-
-

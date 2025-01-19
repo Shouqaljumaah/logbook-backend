@@ -9,6 +9,7 @@ exports.localStrategy = new LocalStrategy(
   { usernameField: "username" },
   async (username, password, done) => {
     try {
+      console.log("localStrategy username", username);
       const user = await Users.findOne({ username });
       const passwordsMatch = user
         ? bcrypt.compare(password, user.password)
