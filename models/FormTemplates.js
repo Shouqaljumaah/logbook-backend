@@ -1,20 +1,22 @@
-const { model, Schema, Types } = require("mongoose");
+const { model, Schema } = require("mongoose");
 
 const FormTemplatesSchema = new Schema({
    formName: {
     type: String,
     required: true,
+    unique: true
   },
   score: {
-    type: String, 
-    optional: true,
-    enum: ['SCORE']
+    type: String,
+    enum: ['SCORE', 'OTHER', ''],
+    default: ''
   },
   scaleDescription: {
     type: String,
-    optional: true
+    required: function() {
+      return this.score === 'SCORE' || this.score === 'OTHER';
+    }
   },
-
   fieldTemplates: [
     {
       type: Schema.Types.ObjectId,
@@ -22,6 +24,5 @@ const FormTemplatesSchema = new Schema({
     },
   ],
 });
-
 
 module.exports = model("FormTemplates", FormTemplatesSchema);
