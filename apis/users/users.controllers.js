@@ -133,18 +133,6 @@ exports.loginUser = async (req, res) => {
   try {
     const { user } = req;
     console.log("user", user.username);
-
-    // Check if password needs to be changed (first login)
-    if (user.isFirstLogin) {
-      return res.status(200).json({ 
-        message: "Password change required",
-        requirePasswordChange: true,
-        userId: user._id,
-        token: null  // No token until password is changed
-      });
-    }
-
-    // Normal login flow if password was already changed
     const payload = {
       id: user.id,
       username: user.username,
@@ -152,6 +140,18 @@ exports.loginUser = async (req, res) => {
       exp: Date.now() + parseInt(JWT_EXPIRATION_MS),
     };
     const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
+    // Check if password needs to be changed (first login)
+    if (user.isFirstLogin) {
+      return res.status(200).json({ 
+        message: "Password change required",
+        requirePasswordChange: true,
+        userId: user._id,
+        token: token  // No token until password is changed
+      });
+    }
+
+    // Normal login flow if password was already changed
+
     console.log("user", user.roles);
     res.json({ 
       token,
@@ -176,12 +176,14 @@ exports.changePassword = async (req, res) => {
     
     const user = await User.findById(userId);
     if (!user) {
+      console.log("User not found");
       return res.status(404).json({ message: "User not found" });
     }
 
     // Verify old password
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
+      console.log("Current password is incorrect");
       return res.status(400).json({ message: "Current password is incorrect" });
     }
 

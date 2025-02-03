@@ -9,66 +9,66 @@ exports.getAllFormSubmitions = async (req, res) => {
     const userId = req.user.id;
     // const { role } = req.query;
     const role = req.user.roles[0];
-    console.log('Backend: Fetching submissions for:', { userId, role });
+    console.log("Backend: Fetching submissions for:", { userId, role });
 
     let query;
-    if (role?.toLowerCase() === 'tutor') {
+    if (role?.toLowerCase() === "tutor") {
       query = {
-        tutor: userId
+        tutor: userId,
       };
     } else {
       query = {
-        resident: userId
+        resident: userId,
       };
     }
 
-    console.log('Query:', query);
-
     const formSubmitions = await FormSubmitions.find(query)
+      .sort({ createdAt: -1 })
       .populate({
-        path: 'formTemplate',
-        select: 'formName'
+        path: "formTemplate",
+        select: "formName",
       })
       .populate({
-        path: 'fieldRecord',
+        path: "fieldRecord",
       })
       .populate({
-        path: 'resident',
-        select: 'username'
+        path: "resident",
+        select: "username",
       })
       .populate({
-        path: 'tutor',
-        select: 'username'
+        path: "tutor",
+        select: "username",
       });
 
-    console.log('Found submissions:', formSubmitions.length);
-    
+    console.log("Found submissions:", formSubmitions.length);
+
     return res.json(formSubmitions);
   } catch (error) {
-    console.error('Error in getAllFormSubmitions:', error);
-    res.status(500).json({ 
-      message: 'Failed to fetch submissions',
-      error: error.message 
+    console.error("Error in getAllFormSubmitions:", error);
+    res.status(500).json({
+      message: "Failed to fetch submissions",
+      error: error.message,
     });
   }
 };
 
 exports.getFormSubmitions = async (req, res) => {
-  const formSubmitions = await FormSubmitions.findById(req.params.id).populate({
-    path: 'formTemplate',
-    select: 'formName'
-  })
-  .populate({
-    path: 'fieldRecord',
-  })
-  .populate({
-    path: 'resident',
-    select: 'username'
-  })
-  .populate({
-    path: 'tutor',
-    select: 'username'
-  });
+  const formSubmitions = await FormSubmitions.findById(req.params.id)
+    .populate({
+      path: "formTemplate",
+      select: "formName",
+    })
+    .populate({
+      path: "fieldRecord",
+    })
+    .populate({
+      path: "resident",
+      select: "username",
+    })
+    .populate({
+      path: "tutor",
+      select: "username",
+    });
   res.json(formSubmitions);
 };
 
@@ -146,12 +146,12 @@ exports.createFormSubmition = async (req, res) => {
 
     // Create each field and store references
     for (const record of fieldRecords) {
-      console.log("record is this ",record)
-      const fieldTemplate = await FieldTemplates.findById(record.fieldTemplate)
-      console.log("fieldTemplate is this ",fieldTemplate._id)
+      console.log("record is this ", record);
+      const fieldTemplate = await FieldTemplates.findById(record.fieldTemplate);
+      console.log("fieldTemplate is this ", fieldTemplate._id);
       const newFieldRecord = await FieldRecords.create({
         ...record,
-        fieldTemplate: record.fieldTemplate
+        fieldTemplate: record.fieldTemplate,
       });
 
       createdFieldRecord.push(newFieldRecord._id);
