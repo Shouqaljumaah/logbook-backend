@@ -27,6 +27,10 @@ exports.getAllFormSubmitions = async (req, res) => {
       .populate({
         path: "formTemplate",
         select: "formName",
+        populate: {
+          path: "fieldTemplates",
+          select: "fieldType",
+        },
       })
       .populate({
         path: "fieldRecord",
@@ -39,6 +43,25 @@ exports.getAllFormSubmitions = async (req, res) => {
         path: "tutor",
         select: "username",
       });
+
+    // Check if each form submission is completed
+    // for (const submission of formSubmitions) {
+    //   const fieldTemplates = submission.formTemplate.fieldTemplates.length  ;
+    //   const fieldRecords = submission.fieldRecord.length;
+    //   if(fieldTemplates === fieldRecords){
+    //   submission.status = "completed";
+    //   }else{
+    //     submission.status = "pending";
+    //   }
+    //   // if (submission.fieldRecord && submission.fieldRecord.length > 0) {
+    //   //   // If there are field records, mark as completed
+    //   //   submission.status = "completed";
+    //   // } else {
+    //   //   // If no field records, mark as pending
+    //   //   submission.status = "pending";
+    //   // }
+    //   // await submission.save();
+    // }
 
     console.log("Found submissions:", formSubmitions.length);
 
@@ -87,30 +110,52 @@ exports.reviewFormSubmitions = async (req, res) => {
   const fieldRecords = req.body.fieldRecords;
   const createdFieldRecord = [];
 
-  for (const record of fieldRecords) {
-    const newFieldRecord = await FieldRecords.create({
-      ...record,
-      formSubmitions: formSubmitionsId,
-    });
-
-    createdFieldRecord.push(newFieldRecord._id);
-  }
-
   try {
+    // Create field records
+    for (const record of fieldRecords) {
+      const newFieldRecord = await FieldRecords.create({
+        ...record,
+        formSubmitions: formSubmitionsId,
+      });
+      createdFieldRecord.push(newFieldRecord._id);
+    }
+
+    // Update form submission with new field records
     const foundFormSubmitions = await FormSubmitions.findByIdAndUpdate(
       formSubmitionsId,
       {
         $push: { fieldRecord: { $each: createdFieldRecord } },
-      }
+      },
+      { new: true } // Return updated document
     );
-    const updatedFormSubmition = await FormSubmitions.findById(
-      formSubmitionsId
-    ).populate("fieldRecord");
-    if (foundFormSubmitions) {
-      res.status(200).json(updatedFormSubmition);
-    } else {
-      res.status(404).json({ message: " Not Found" });
+
+    if (!foundFormSubmitions) {
+      return res.status(404).json({ message: "Form submission not found" });
     }
+
+    // Get form template and check completion
+    const formTemplate = await FormTemplates.findById(foundFormSubmitions.formTemplate);
+    if (!formTemplate) {
+      return res.status(404).json({ message: "Form template not found" });
+    }
+
+    const fieldTemplatesCount = formTemplate.fieldTemplates.length;
+    const fieldRecordsCount = foundFormSubmitions.fieldRecord.length;
+
+    // Update status if all fields are completed
+    if (fieldRecordsCount === fieldTemplatesCount) {
+      const updatedFormSubmition = await FormSubmitions.findByIdAndUpdate(
+        formSubmitionsId,
+        { $set: { status: "completed" } },
+        { new: true }
+      ).populate("fieldRecord");
+      
+      return res.status(200).json(updatedFormSubmition);
+    }
+
+    // If not all fields are completed, return the current state
+    return res.status(200).json(foundFormSubmitions);
+
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
