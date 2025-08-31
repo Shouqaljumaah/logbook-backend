@@ -5,17 +5,27 @@ const {
   createFormSubmition,
   reviewFormSubmitions,
   deleteFormSubmitions,
- // getTutorPendingForms,// change done here to getTutorPendingForms
+  // getTutorPendingForms,// change done here to getTutorPendingForms
+  deletFormSubmition,
 } = require("./formSubmitions.controllers");
-const passport = require('passport');
+const passport = require("passport");
 
 const router = express.Router();
 
-router.get("/",passport.authenticate("jwt", { session: false }), getAllFormSubmitions); //Get all
+router.get(
+  "/",
+  passport.authenticate("jwt", { session: false }),
+  getAllFormSubmitions
+); //Get all
 router.get("/:id", getFormSubmitions); //Get  by id
 router.post("/", createFormSubmition); //add
 router.put("/:formSubmitionsId/review", reviewFormSubmitions); //uptate
-router.delete("/:formSubmitionsId", deleteFormSubmitions); //Delete
+router.delete(
+  "/:formSubmitionsId",
+  passport.authenticate("jwt", { session: false }),
+  deletFormSubmition
+); //Delete
+
 //router.get("/", getTutorPendingForms);//changes done here to getTutorPendingForms
 
 module.exports = router;
