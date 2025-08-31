@@ -133,7 +133,7 @@ exports.loginUser = async (req, res) => {
     const payload = {
       id: user.id,
       username: user.username,
-      role: user.roles.join(","),
+      role: user.roles,
       exp: Date.now() + parseInt(JWT_EXPIRATION_MS),
     };
     const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
