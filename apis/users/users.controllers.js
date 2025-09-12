@@ -5,6 +5,7 @@ const { JWT_SECRET, JWT_EXPIRATION_MS } = require("../../key");
 const fs = require("fs");
 const path = require("path");
 const upload = require("../../multer");
+const FormSubmitions = require("../../models/FormSubmitions");
 
 exports.signupUser = async (req, res) => {
   try {
@@ -117,8 +118,31 @@ exports.logoutUser = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({}, "-password"); // Exclude password field
-    res.json(users);
+    const users = await User.find({}, "-password")
+      .populate("supervisor")
+      .sort({ createdAt: -1 }); // Exclude password field
+
+    // Add totalSubmissions to each user
+    const usersWithSubmissions = await Promise.all(
+      users.map(async (user) => {
+        let totalSubmissions = 0;
+        if (user.roles.includes("tutor")) {
+          totalSubmissions = await FormSubmitions.countDocuments({
+            tutor: user._id,
+          });
+        } else {
+          totalSubmissions = await FormSubmitions.countDocuments({
+            resident: user._id,
+          });
+        }
+        return {
+          ...user.toObject(),
+          totalSubmissions,
+        };
+      })
+    );
+
+    res.json(usersWithSubmissions);
   } catch (error) {
     console.error("Error fetching users:", error);
     res.status(500).json({ message: "Failed to fetch users" });
@@ -135,6 +159,7 @@ exports.loginUser = async (req, res) => {
       username: user.username,
       role: user.roles,
       exp: Date.now() + parseInt(JWT_EXPIRATION_MS),
+      image: user.image,
     };
     const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
     // Check if password needs to be changed (first login)
@@ -156,6 +181,11 @@ exports.loginUser = async (req, res) => {
         id: user._id,
         username: user.username,
         role: user.roles,
+        image: user.image,
+        email: user.email,
+        phone: user.phone,
+        supervisor: user.supervisor,
+        isFirstLogin: user.isFirstLogin,
       },
       requirePasswordChange: false,
     });
@@ -366,30 +396,51 @@ exports.deleteUser = async (req, res) => {
 exports.updateUser = async (req, res) => {
   try {
     // Log the incoming request
-    console.log("Update request received:", {
-      userId: req.params.id,
-      updates: req.body,
-      adminId: req.user._id,
-    });
+    // console.log("Update request received:", {
+    //   userId: req.params.id,
+    //   updates: req.body,
+    //   adminId: req.user._id,
+    // });
 
     // Verify admin user
     const adminUser = await User.findById(req.user._id);
-    if (!adminUser || adminUser.role !== "admin") {
+    if (!adminUser || !adminUser.roles.includes("admin")) {
       return res.status(403).json({
         message: "Only admins can update users",
       });
     }
 
-    // Find and update the user
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    // Handle image upload
+    console.log("req.file", req.file);
+    let image = user.image; // Keep existing image by default
+
+    if (req.file) {
+      // New image uploaded
+      image = req.file.path;
+    }
+
+    console.log("Final image path:", image);
+
+    // Prepare update data - only include fields that are provided
+    const updateData = {};
+    if (req.body.username) updateData.username = req.body.username;
+    if (req.body.email) updateData.email = req.body.email;
+    if (req.body.phone) updateData.phone = req.body.phone;
+    if (req.body.supervisor !== undefined)
+      updateData.supervisor = req.body.supervisor || null;
+    if (image) updateData.image = image;
+
+    // Update the user
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
-      {
-        $set: {
-          username: req.body.username,
-          email: req.body.email,
-          phone: req.body.phone,
-        },
-      },
+      { $set: updateData },
       { new: true } // Return the updated document
     );
 
@@ -398,8 +449,6 @@ exports.updateUser = async (req, res) => {
         message: "User not found",
       });
     }
-
-    console.log("User updated successfully:", updatedUser);
 
     // Send success response
     res.json({
@@ -410,6 +459,35 @@ exports.updateUser = async (req, res) => {
     console.error("Update error:", error);
     res.status(500).json({
       message: "Error updating user",
+      error: error.message,
+    });
+  }
+};
+
+// get user by id
+exports.getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).populate("supervisor");
+
+    res.json(user);
+  } catch (error) {
+    console.error("Error getting user by id:", error);
+    res.status(500).json({
+      message: "Error getting user by id",
+      error: error.message,
+    });
+  }
+};
+
+//get user by token
+exports.getUserByToken = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    res.json(user);
+  } catch (error) {
+    console.error("Error getting user by token:", error);
+    res.status(500).json({
+      message: "Error getting user by token",
       error: error.message,
     });
   }

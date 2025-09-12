@@ -7,6 +7,7 @@ const {
   deleteFormSubmitions,
   // getTutorPendingForms,// change done here to getTutorPendingForms
   deletFormSubmition,
+  getFormSubmitionsByUserId,
 } = require("./formSubmitions.controllers");
 const passport = require("passport");
 
@@ -17,6 +18,7 @@ router.get(
   passport.authenticate("jwt", { session: false }),
   getAllFormSubmitions
 ); //Get all
+
 router.get("/:id", getFormSubmitions); //Get  by id
 router.post("/", createFormSubmition); //add
 router.put("/:formSubmitionsId/review", reviewFormSubmitions); //uptate
@@ -25,6 +27,7 @@ router.delete(
   passport.authenticate("jwt", { session: false }),
   deletFormSubmition
 ); //Delete
+router.get("/user/:id", getFormSubmitionsByUserId); //Get form submitions by user id
 
 //router.get("/", getTutorPendingForms);//changes done here to getTutorPendingForms
 

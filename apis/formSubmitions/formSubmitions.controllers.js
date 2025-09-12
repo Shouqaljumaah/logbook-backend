@@ -2,6 +2,7 @@ const FormSubmitions = require("../../models/FormSubmitions");
 const FormTemplates = require("../../models/FormTemplates");
 const FieldRecords = require("../../models/FieldRecords");
 const FieldTemplates = require("../../models/FieldTemplates");
+const Users = require("../../models/Users");
 
 exports.getAllFormSubmitions = async (req, res) => {
   try {
@@ -10,18 +11,21 @@ exports.getAllFormSubmitions = async (req, res) => {
     // const { role } = req.query;
     const role = req.user.roles[0];
     // console.log("Backend: Fetching submissions for:", { userId, role });s
-
+    const { formPlatform } = req.query;
     let query;
-    if (role?.toLowerCase() === "tutor") {
-      query = {
-        tutor: userId,
-      };
+    console.log("formPlatform", formPlatform);
+    if (formPlatform === "web") {
     } else {
-      query = {
-        resident: userId,
-      };
+      if (role?.toLowerCase() === "tutor") {
+        query = {
+          tutor: userId,
+        };
+      } else {
+        query = {
+          resident: userId,
+        };
+      }
     }
-
     const formSubmitions = await FormSubmitions.find(query)
       .sort({ createdAt: -1 })
       .populate({
@@ -245,4 +249,58 @@ exports.deletFormSubmition = async (req, res) => {
   } catch (err) {
     return res.status(404).json({ message: err.message }); // send an error response
   }
+};
+
+// get for submitions by user id
+exports.getFormSubmitionsByUserId = async (req, res) => {
+  const userId = req.params.id;
+  //get user
+  const user = await Users.findById(userId);
+  let formSubmitions;
+  if (user.roles.includes("tutor")) {
+    formSubmitions = await FormSubmitions.find({ tutor: userId })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "formTemplate",
+        select: "formName",
+        populate: {
+          path: "fieldTemplates",
+          select: "fieldType",
+        },
+      })
+      .populate({
+        path: "fieldRecord",
+      })
+      .populate({
+        path: "resident",
+        select: "username",
+      })
+      .populate({
+        path: "tutor",
+        select: "username",
+      });
+  } else {
+    formSubmitions = await FormSubmitions.find({ resident: userId })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "formTemplate",
+        select: "formName",
+        populate: {
+          path: "fieldTemplates",
+          select: "fieldType",
+        },
+      })
+      .populate({
+        path: "fieldRecord",
+      })
+      .populate({
+        path: "resident",
+        select: "username",
+      })
+      .populate({
+        path: "tutor",
+        select: "username",
+      });
+  }
+  return res.json(formSubmitions);
 };
