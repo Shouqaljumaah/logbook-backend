@@ -10,11 +10,14 @@ const UserSchema = new Schema({
   image: { type: String },
   email: { type: String },
   phone: { type: String },
-  roles: [{ 
-    type: String, 
-    enum: ["admin", "tutor", "resident"]
-  }], // Change from single role to array of roles
+  roles: [
+    {
+      type: String,
+      enum: ["admin", "tutor", "resident"],
+    },
+  ], // Change from single role to array of roles
   isFirstLogin: { type: Boolean, default: true },
+  supervisor: { type: Schema.Types.ObjectId, ref: "User" },
 });
 
 module.exports = model("User", UserSchema);

@@ -22,14 +22,16 @@ app.use(passport.initialize());
 passport.use(localStrategy);
 passport.use(jwtStrategy);
 
-app.use("/fieldTemplate", fieldTemplateRouter)
+app.use("/media", express.static(path.join(__dirname, "media")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+app.use("/fieldTemplate", fieldTemplateRouter);
 app.use("/formTemplates", formTemplatesRouter);
 app.use("/users", usersRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/formSubmitions", formSubmitionsRouter);
 app.use("/announcements", announcementsRouter);
-app.use("/media", express.static(path.join(__dirname, "media")));
-app.use('/api/users', require('./apis/users/users.routes'));// changes done here 
+app.use("/api/users", require("./apis/users/users.routes")); // changes done here
 connectDB();
 
 app.listen(PORT, () => {

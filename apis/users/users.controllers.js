@@ -2,10 +2,10 @@ const bcrypt = require("bcrypt");
 const User = require("../../models/Users");
 const jwt = require("jsonwebtoken");
 const { JWT_SECRET, JWT_EXPIRATION_MS } = require("../../key");
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 const upload = require("../../multer");
-
+const FormSubmitions = require("../../models/FormSubmitions");
 
 exports.signupUser = async (req, res) => {
   try {
@@ -14,14 +14,14 @@ exports.signupUser = async (req, res) => {
     console.log("Admin user:", adminUser); // Debug log
 
     // Check if user exists and is admin
-    if (!adminUser || !adminUser.roles.includes('admin')) {
-      return res.status(403).json({ 
-        message: "Only admins can create new users" 
+    if (!adminUser || !adminUser.roles.includes("admin")) {
+      return res.status(403).json({
+        message: "Only admins can create new users",
       });
     }
 
     // Remove spaces from username
-    const username = req.body.username.replace(/\s+/g, '');
+    const username = req.body.username.replace(/\s+/g, "");
     const password = req.body.password;
     const role = req.body.role; // Single role from request
     const email = req.body.email?.trim();
@@ -29,23 +29,23 @@ exports.signupUser = async (req, res) => {
 
     // Validate required fields
     if (!username || !password || !role) {
-      return res.status(400).json({ 
-        message: "Username, password and role are required" 
+      return res.status(400).json({
+        message: "Username, password and role are required",
       });
     }
 
     // Validate role
-    if (!['resident', 'tutor'].includes(role)) {
-      return res.status(400).json({ 
-        message: "Role must be either 'resident' or 'tutor'" 
+    if (!["resident", "tutor"].includes(role)) {
+      return res.status(400).json({
+        message: "Role must be either 'resident' or 'tutor'",
       });
     }
 
     // Check if username already exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(400).json({ 
-        message: "Username already exists" 
+      return res.status(400).json({
+        message: "Username already exists",
       });
     }
 
@@ -60,20 +60,19 @@ exports.signupUser = async (req, res) => {
       roles: [role], // Store role in an array
       isFirstLogin: true,
       email,
-      phone
+      phone,
     });
 
-    res.status(201).json({ 
+    res.status(201).json({
       message: "User created successfully",
       user: {
         username: user.username,
         roles: user.roles,
         _id: user._id,
         email: user.email,
-        phone: user.phone
-      }
+        phone: user.phone,
+      },
     });
-
   } catch (e) {
     console.error("Error:", e);
     if (e.code === 11000) {
@@ -88,14 +87,14 @@ exports.logoutUser = async (req, res) => {
   try {
     // Get token from request header
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ 
-        message: "No token provided" 
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "No token provided",
       });
     }
 
-    const token = authHeader.split(' ')[1];
-    
+    const token = authHeader.split(" ")[1];
+
     // Find user with this token
     const users = await User.find({ session: token });
     if (users.length > 0) {
@@ -105,27 +104,49 @@ exports.logoutUser = async (req, res) => {
       await user.save();
     }
 
-    res.status(200).json({ 
-      message: "Logged out successfully" 
+    res.status(200).json({
+      message: "Logged out successfully",
     });
-    
   } catch (e) {
-    console.error('Logout error:', e);
-    res.status(500).json({ 
+    console.error("Logout error:", e);
+    res.status(500).json({
       message: "Error during logout",
-      error: e.message 
+      error: e.message,
     });
   }
 };
 
 exports.getAllUsers = async (req, res) => {
-    try {
-        const users = await User.find({}, '-password'); // Exclude password field
-        res.json(users);
-    } catch (error) {
-        console.error('Error fetching users:', error);
-        res.status(500).json({ message: 'Failed to fetch users' });
-    }
+  try {
+    const users = await User.find({}, "-password")
+      .populate("supervisor")
+      .sort({ createdAt: -1 }); // Exclude password field
+
+    // Add totalSubmissions to each user
+    const usersWithSubmissions = await Promise.all(
+      users.map(async (user) => {
+        let totalSubmissions = 0;
+        if (user.roles.includes("tutor")) {
+          totalSubmissions = await FormSubmitions.countDocuments({
+            tutor: user._id,
+          });
+        } else {
+          totalSubmissions = await FormSubmitions.countDocuments({
+            resident: user._id,
+          });
+        }
+        return {
+          ...user.toObject(),
+          totalSubmissions,
+        };
+      })
+    );
+
+    res.json(usersWithSubmissions);
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    res.status(500).json({ message: "Failed to fetch users" });
+  }
 };
 ////////////////////////////////////////////////////
 
@@ -138,33 +159,38 @@ exports.loginUser = async (req, res) => {
       username: user.username,
       role: user.roles,
       exp: Date.now() + parseInt(JWT_EXPIRATION_MS),
+      image: user.image,
     };
     const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
     // Check if password needs to be changed (first login)
     if (user.isFirstLogin) {
-      return res.status(200).json({ 
+      return res.status(200).json({
         message: "Password change required",
         requirePasswordChange: true,
         userId: user._id,
-        token: token  // No token until password is changed
+        token: token, // No token until password is changed
       });
     }
 
     // Normal login flow if password was already changed
 
     console.log("user", user.roles);
-    res.json({ 
+    res.json({
       token,
       user: {
         id: user._id,
         username: user.username,
-        role: user.roles
+        role: user.roles,
+        image: user.image,
+        email: user.email,
+        phone: user.phone,
+        supervisor: user.supervisor,
+        isFirstLogin: user.isFirstLogin,
       },
-      requirePasswordChange: false 
+      requirePasswordChange: false,
     });
-
   } catch (e) {
-    console.log('Login error:', e);
+    console.log("Login error:", e);
     res.status(500).json({ message: e.message });
   }
 };
@@ -173,7 +199,7 @@ exports.loginUser = async (req, res) => {
 exports.changePassword = async (req, res) => {
   try {
     const { userId, oldPassword, newPassword } = req.body;
-    
+
     const user = await User.findById(userId);
     if (!user) {
       console.log("User not found");
@@ -190,10 +216,10 @@ exports.changePassword = async (req, res) => {
     // Hash and save new password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-    
+
     // Update user
     user.password = hashedPassword;
-    user.isFirstLogin = false;  // Mark that password has been changed
+    user.isFirstLogin = false; // Mark that password has been changed
     await user.save();
 
     // Generate new token after password change
@@ -204,23 +230,25 @@ exports.changePassword = async (req, res) => {
     };
     const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
 
-    res.status(200).json({ 
+    res.status(200).json({
       message: "Password updated successfully",
-      token  // Send new token for continued access
+      token, // Send new token for continued access
     });
-
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
 };
 
-// changes done here 
+// changes done here
 exports.tutorList = async (req, res) => {
   try {
     // Find all users who are tutors (including those who are also admins)
-    const tutors = await User.find({ 
-      roles: { $in: ['tutor', 'admin'] }
-    }, '-password');
+    const tutors = await User.find(
+      {
+        roles: { $in: ["tutor", "admin"] },
+      },
+      "-password"
+    );
 
     // // Add isAdmin flag to response
     // const tutorsWithAdminStatus = tutors.map(tutor => ({
@@ -230,10 +258,10 @@ exports.tutorList = async (req, res) => {
 
     res.json(tutors);
   } catch (error) {
-    console.error('Error fetching tutors:', error);
-    res.status(500).json({ 
-      message: 'Failed to fetch tutors',
-      error: error.message 
+    console.error("Error fetching tutors:", error);
+    res.status(500).json({
+      message: "Failed to fetch tutors",
+      error: error.message,
     });
   }
 };
@@ -248,14 +276,14 @@ exports.updateUserImage = async (req, res) => {
 
     // Delete old image if it exists
     if (user.image) {
-      const oldImagePath = path.join(__dirname, '../../', user.image);
+      const oldImagePath = path.join(__dirname, "../../", user.image);
       try {
         if (fs.existsSync(oldImagePath)) {
           fs.unlinkSync(oldImagePath);
-          console.log('Old image deleted successfully');
+          console.log("Old image deleted successfully");
         }
       } catch (err) {
-        console.error('Error deleting old image:', err);
+        console.error("Error deleting old image:", err);
       }
     }
 
@@ -268,23 +296,20 @@ exports.updateUserImage = async (req, res) => {
 
     res.json({
       message: "Profile image updated successfully",
-      user: updatedUser
+      user: updatedUser,
     });
-
   } catch (e) {
-    console.error('Error updating image:', e);
+    console.error("Error updating image:", e);
     res.status(500).json({ message: e.message });
   }
 };
-
-
 
 exports.createAdmin = async (req, res) => {
   try {
     // Validate required fields
     if (!req.body.username || !req.body.password) {
-      return res.status(400).json({ 
-        message: "Username and password are required" 
+      return res.status(400).json({
+        message: "Username and password are required",
       });
     }
 
@@ -294,20 +319,21 @@ exports.createAdmin = async (req, res) => {
     const admin = await User.create({
       username: req.body.username,
       password: hashedPassword,
-      role: 'admin',
-      isFirstLogin: false  // Admins don't need to change password
+      role: "admin",
+      isFirstLogin: false, // Admins don't need to change password
     });
 
-    res.status(201).json({ 
+    res.status(201).json({
       message: "Admin created successfully",
       admin: {
         username: admin.username,
         role: admin.role,
-        _id: admin._id
-      }
+        _id: admin._id,
+      },
     });
   } catch (e) {
-    if (e.code === 11000) { // MongoDB duplicate key error
+    if (e.code === 11000) {
+      // MongoDB duplicate key error
       res.status(400).json({ message: "Username already exists" });
     } else {
       res.status(400).json({ message: e.message });
@@ -316,108 +342,155 @@ exports.createAdmin = async (req, res) => {
 };
 
 exports.deleteUser = async (req, res) => {
-    try {
-        console.log("Delete request received. Token user:", req.user); // Debug log
-        
-        // Get the admin user from the token
-        const adminUser = await User.findById(req.user._id || req.user.id);
-        console.log("Admin user found:", adminUser); // Debug log
+  try {
+    console.log("Delete request received. Token user:", req.user); // Debug log
 
-        // Check if user exists and is admin
-        if (!adminUser) {
-            console.log("No admin user found"); // Debug log
-            return res.status(403).json({ 
-                message: "Admin user not found" 
-            });
-        }
+    // Get the admin user from the token
+    const adminUser = await User.findById(req.user._id || req.user.id);
+    console.log("Admin user found:", adminUser); // Debug log
 
-        if (!adminUser.roles.includes('admin')) { // Check roles array instead of role property
-            console.log("User is not admin. Roles:", adminUser.roles); // Debug log
-            return res.status(403).json({ 
-                message: "Only admins can delete users" 
-            });
-        }
-
-        const userId = req.params.id;
-        console.log("Attempting to delete user:", userId); // Debug log
-
-        // Find and delete the user
-        const deletedUser = await User.findByIdAndDelete(userId);
-
-        if (!deletedUser) {
-            console.log("User to delete not found"); // Debug log
-            return res.status(404).json({ 
-                message: "User not found" 
-            });
-        }
-
-        console.log("Successfully deleted user:", deletedUser); // Debug log
-
-        res.json({ 
-            message: "User deleted successfully",
-            user: deletedUser
-        });
-
-    } catch (error) {
-        console.error('Error in deleteUser:', error);
-        res.status(500).json({ 
-            message: "Error deleting user",
-            error: error.message
-        });
+    // Check if user exists and is admin
+    if (!adminUser) {
+      console.log("No admin user found"); // Debug log
+      return res.status(403).json({
+        message: "Admin user not found",
+      });
     }
+
+    if (!adminUser.roles.includes("admin")) {
+      // Check roles array instead of role property
+      console.log("User is not admin. Roles:", adminUser.roles); // Debug log
+      return res.status(403).json({
+        message: "Only admins can delete users",
+      });
+    }
+
+    const userId = req.params.id;
+    console.log("Attempting to delete user:", userId); // Debug log
+
+    // Find and delete the user
+    const deletedUser = await User.findByIdAndDelete(userId);
+
+    if (!deletedUser) {
+      console.log("User to delete not found"); // Debug log
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    console.log("Successfully deleted user:", deletedUser); // Debug log
+
+    res.json({
+      message: "User deleted successfully",
+      user: deletedUser,
+    });
+  } catch (error) {
+    console.error("Error in deleteUser:", error);
+    res.status(500).json({
+      message: "Error deleting user",
+      error: error.message,
+    });
+  }
 };
 
 exports.updateUser = async (req, res) => {
-    try {
-        // Log the incoming request
-        console.log('Update request received:', {
-            userId: req.params.id,
-            updates: req.body,
-            adminId: req.user._id
-        });
+  try {
+    // Log the incoming request
+    // console.log("Update request received:", {
+    //   userId: req.params.id,
+    //   updates: req.body,
+    //   adminId: req.user._id,
+    // });
 
-        // Verify admin user
-        const adminUser = await User.findById(req.user._id);
-        if (!adminUser || adminUser.role !== 'admin') {
-            return res.status(403).json({ 
-                message: "Only admins can update users" 
-            });
-        }
-
-        // Find and update the user
-        const updatedUser = await User.findByIdAndUpdate(
-            req.params.id,
-            {
-                $set: {
-                    username: req.body.username,
-                    email: req.body.email,
-                    phone: req.body.phone
-                }
-            },
-            { new: true }  // Return the updated document
-        );
-
-        if (!updatedUser) {
-            return res.status(404).json({ 
-                message: "User not found" 
-            });
-        }
-
-        console.log('User updated successfully:', updatedUser);
-
-        // Send success response
-        res.json({
-            message: "User updated successfully",
-            user: updatedUser
-        });
-
-    } catch (error) {
-        console.error('Update error:', error);
-        res.status(500).json({
-            message: "Error updating user",
-            error: error.message
-        });
+    // Verify admin user
+    const adminUser = await User.findById(req.user._id);
+    if (!adminUser || !adminUser.roles.includes("admin")) {
+      return res.status(403).json({
+        message: "Only admins can update users",
+      });
     }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    // Handle image upload
+    console.log("req.file", req.file);
+    let image = user.image; // Keep existing image by default
+
+    if (req.file) {
+      // New image uploaded
+      image = req.file.path;
+    }
+
+    console.log("Final image path:", image);
+
+    // Prepare update data - only include fields that are provided
+    const updateData = {};
+    if (req.body.username) updateData.username = req.body.username;
+    if (req.body.email) updateData.email = req.body.email;
+    if (req.body.phone) updateData.phone = req.body.phone;
+    if (req.body.supervisor !== undefined)
+      updateData.supervisor = req.body.supervisor || null;
+    if (image) updateData.image = image;
+
+    // Update the user
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true } // Return the updated document
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    // Send success response
+    res.json({
+      message: "User updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Update error:", error);
+    res.status(500).json({
+      message: "Error updating user",
+      error: error.message,
+    });
+  }
+};
+
+// get user by id
+exports.getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).populate("supervisor");
+
+    res.json(user);
+  } catch (error) {
+    console.error("Error getting user by id:", error);
+    res.status(500).json({
+      message: "Error getting user by id",
+      error: error.message,
+    });
+  }
+};
+
+//get user by token
+exports.getUserByToken = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    res.json(user);
+  } catch (error) {
+    console.error("Error getting user by token:", error);
+    res.status(500).json({
+      message: "Error getting user by token",
+      error: error.message,
+    });
+  }
 };
 
 //Example mobile app flow:

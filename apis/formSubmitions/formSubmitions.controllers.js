@@ -2,6 +2,7 @@ const FormSubmitions = require("../../models/FormSubmitions");
 const FormTemplates = require("../../models/FormTemplates");
 const FieldRecords = require("../../models/FieldRecords");
 const FieldTemplates = require("../../models/FieldTemplates");
+const Users = require("../../models/Users");
 
 exports.getAllFormSubmitions = async (req, res) => {
   try {
@@ -9,24 +10,31 @@ exports.getAllFormSubmitions = async (req, res) => {
     const userId = req.user.id;
     // const { role } = req.query;
     const role = req.user.roles[0];
-    console.log("Backend: Fetching submissions for:", { userId, role });
-
+    // console.log("Backend: Fetching submissions for:", { userId, role });s
+    const { formPlatform } = req.query;
     let query;
-    if (role?.toLowerCase() === "tutor") {
-      query = {
-        tutor: userId,
-      };
+    console.log("formPlatform", formPlatform);
+    if (formPlatform === "web") {
     } else {
-      query = {
-        resident: userId,
-      };
+      if (role?.toLowerCase() === "tutor") {
+        query = {
+          tutor: userId,
+        };
+      } else {
+        query = {
+          resident: userId,
+        };
+      }
     }
-
     const formSubmitions = await FormSubmitions.find(query)
       .sort({ createdAt: -1 })
       .populate({
         path: "formTemplate",
         select: "formName",
+        populate: {
+          path: "fieldTemplates",
+          select: "fieldType",
+        },
       })
       .populate({
         path: "fieldRecord",
@@ -39,6 +47,25 @@ exports.getAllFormSubmitions = async (req, res) => {
         path: "tutor",
         select: "username",
       });
+
+    // Check if each form submission is completed
+    // for (const submission of formSubmitions) {
+    //   const fieldTemplates = submission.formTemplate.fieldTemplates.length  ;
+    //   const fieldRecords = submission.fieldRecord.length;
+    //   if(fieldTemplates === fieldRecords){
+    //   submission.status = "completed";
+    //   }else{
+    //     submission.status = "pending";
+    //   }
+    //   // if (submission.fieldRecord && submission.fieldRecord.length > 0) {
+    //   //   // If there are field records, mark as completed
+    //   //   submission.status = "completed";
+    //   // } else {
+    //   //   // If no field records, mark as pending
+    //   //   submission.status = "pending";
+    //   // }
+    //   // await submission.save();
+    // }
 
     console.log("Found submissions:", formSubmitions.length);
 
@@ -72,14 +99,14 @@ exports.getFormSubmitions = async (req, res) => {
   res.json(formSubmitions);
 };
 
-exports.deleteFormSubmitions = async (req, res) => {
-  try {
-    await FormSubmitions.deleteOne({ _id: req.params.id });
-    res.status(204).end();
-  } catch (err) {
-    return res.status(404).json({ message: "E" });
-  }
-};
+// exports.deleteFormSubmitions = async (req, res) => {
+//   try {
+//     await FormSubmitions.deleteOne({ _id: req.params.id });
+//     res.status(204).end();
+//   } catch (err) {
+//     return res.status(404).json({ message: "E" });
+//   }
+// };
 ///////////////////////////////////////////////
 
 exports.reviewFormSubmitions = async (req, res) => {
@@ -87,30 +114,53 @@ exports.reviewFormSubmitions = async (req, res) => {
   const fieldRecords = req.body.fieldRecords;
   const createdFieldRecord = [];
 
-  for (const record of fieldRecords) {
-    const newFieldRecord = await FieldRecords.create({
-      ...record,
-      formSubmitions: formSubmitionsId,
-    });
-
-    createdFieldRecord.push(newFieldRecord._id);
-  }
-
   try {
+    // Create field records
+    for (const record of fieldRecords) {
+      const newFieldRecord = await FieldRecords.create({
+        ...record,
+        formSubmitions: formSubmitionsId,
+      });
+      createdFieldRecord.push(newFieldRecord._id);
+    }
+
+    // Update form submission with new field records
     const foundFormSubmitions = await FormSubmitions.findByIdAndUpdate(
       formSubmitionsId,
       {
         $push: { fieldRecord: { $each: createdFieldRecord } },
-      }
+      },
+      { new: true } // Return updated document
     );
-    const updatedFormSubmition = await FormSubmitions.findById(
-      formSubmitionsId
-    ).populate("fieldRecord");
-    if (foundFormSubmitions) {
-      res.status(200).json(updatedFormSubmition);
-    } else {
-      res.status(404).json({ message: " Not Found" });
+
+    if (!foundFormSubmitions) {
+      return res.status(404).json({ message: "Form submission not found" });
     }
+
+    // Get form template and check completion
+    const formTemplate = await FormTemplates.findById(
+      foundFormSubmitions.formTemplate
+    );
+    if (!formTemplate) {
+      return res.status(404).json({ message: "Form template not found" });
+    }
+
+    const fieldTemplatesCount = formTemplate.fieldTemplates.length;
+    const fieldRecordsCount = foundFormSubmitions.fieldRecord.length;
+
+    // Update status if all fields are completed
+    if (fieldRecordsCount === fieldTemplatesCount) {
+      const updatedFormSubmition = await FormSubmitions.findByIdAndUpdate(
+        formSubmitionsId,
+        { $set: { status: "completed" } },
+        { new: true }
+      ).populate("fieldRecord");
+
+      return res.status(200).json(updatedFormSubmition);
+    }
+
+    // If not all fields are completed, return the current state
+    return res.status(200).json(foundFormSubmitions);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
@@ -175,4 +225,82 @@ exports.createFormSubmition = async (req, res) => {
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
+};
+
+exports.deletFormSubmition = async (req, res) => {
+  try {
+    const formSubmition = await FormSubmitions.findById(
+      req.params.formSubmitionsId
+    ); // find the form submition by id
+    if (!formSubmition) {
+      return res.status(404).json({ message: "Form submission not found" }); // send an error response
+    }
+
+    if (formSubmition.tutor.toString() !== req.user.id) {
+      // check if the tutor is the same as the user
+      return res.status(403).json({ message: "Unauthorized" }); // send an error response
+    }
+    await FormSubmitions.deleteOne({ _id: req.params.formSubmitionsId }); // delete the form submition
+    await FieldRecords.deleteMany({
+      formSubmitions: req.params.formSubmitionsId,
+    }); // delete the field records
+
+    res.status(204).end(); // send a success response
+  } catch (err) {
+    return res.status(404).json({ message: err.message }); // send an error response
+  }
+};
+
+// get for submitions by user id
+exports.getFormSubmitionsByUserId = async (req, res) => {
+  const userId = req.params.id;
+  //get user
+  const user = await Users.findById(userId);
+  let formSubmitions;
+  if (user.roles.includes("tutor")) {
+    formSubmitions = await FormSubmitions.find({ tutor: userId })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "formTemplate",
+        select: "formName",
+        populate: {
+          path: "fieldTemplates",
+          select: "fieldType",
+        },
+      })
+      .populate({
+        path: "fieldRecord",
+      })
+      .populate({
+        path: "resident",
+        select: "username",
+      })
+      .populate({
+        path: "tutor",
+        select: "username",
+      });
+  } else {
+    formSubmitions = await FormSubmitions.find({ resident: userId })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "formTemplate",
+        select: "formName",
+        populate: {
+          path: "fieldTemplates",
+          select: "fieldType",
+        },
+      })
+      .populate({
+        path: "fieldRecord",
+      })
+      .populate({
+        path: "resident",
+        select: "username",
+      })
+      .populate({
+        path: "tutor",
+        select: "username",
+      });
+  }
+  return res.json(formSubmitions);
 };
