@@ -10,7 +10,9 @@ const FormSubmitions = require("../../models/FormSubmitions");
 exports.signupUser = async (req, res) => {
   try {
     // Get the admin user from the token
-    const adminUser = await User.findById(req.user._id);
+    const adminUser = await User.findById(req.user._id).populate(
+      "institutions"
+    );
     console.log("Admin user:", adminUser); // Debug log
 
     // Check if user exists and is admin
@@ -26,6 +28,7 @@ exports.signupUser = async (req, res) => {
     const role = req.body.role; // Single role from request
     const email = req.body.email?.trim();
     const phone = req.body.phone?.trim();
+    const institutionId = req.body.institutionId; // Institution to assign user to
 
     // Validate required fields
     if (!username || !password || !role) {
@@ -41,6 +44,37 @@ exports.signupUser = async (req, res) => {
       });
     }
 
+    // Determine institution - admin must be admin of the institution (in Institution.admins[])
+    const Institution = require("../../models/Institutions");
+    let institutions = [];
+
+    if (institutionId) {
+      // Verify admin is actually admin of this institution (not just member)
+      const institution = await Institution.findOne({
+        _id: institutionId,
+        admins: adminUser._id,
+      });
+
+      if (!institution) {
+        return res.status(403).json({
+          message: "You are not an admin of this institution",
+        });
+      }
+      institutions = [institutionId];
+    } else {
+      // Find first institution where user is admin
+      const adminInstitutions = await Institution.find({
+        admins: adminUser._id,
+      });
+
+      if (adminInstitutions.length === 0) {
+        return res.status(403).json({
+          message: "You are not an admin of any institution",
+        });
+      }
+      institutions = [adminInstitutions[0]._id];
+    }
+
     // Check if username already exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
@@ -53,7 +87,7 @@ exports.signupUser = async (req, res) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create user with roles array
+    // Create user with roles array and institution
     const user = await User.create({
       username,
       password: hashedPassword,
@@ -61,16 +95,22 @@ exports.signupUser = async (req, res) => {
       isFirstLogin: true,
       email,
       phone,
+      institutions,
     });
+
+    const populatedUser = await User.findById(user._id).populate(
+      "institutions"
+    );
 
     res.status(201).json({
       message: "User created successfully",
       user: {
-        username: user.username,
-        roles: user.roles,
-        _id: user._id,
-        email: user.email,
-        phone: user.phone,
+        username: populatedUser.username,
+        roles: populatedUser.roles,
+        _id: populatedUser._id,
+        email: populatedUser.email,
+        phone: populatedUser.phone,
+        institutions: populatedUser.institutions,
       },
     });
   } catch (e) {
@@ -118,8 +158,24 @@ exports.logoutUser = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({}, "-password")
+    // Get the requesting user to determine institution access
+    const requestingUser = await User.findById(req.user._id).populate(
+      "institutions"
+    );
+
+    // Build query based on user's institutions
+    let query = {};
+    if (!requestingUser.isSuperAdmin) {
+      // Filter users by requesting user's institutions
+      const institutionIds = requestingUser.institutions.map(
+        (inst) => inst._id
+      );
+      query.institutions = { $in: institutionIds };
+    }
+
+    const users = await User.find(query, "-password")
       .populate("supervisor")
+      .populate("institutions")
       .sort({ createdAt: -1 }); // Exclude password field
 
     // Add totalSubmissions to each user
@@ -242,19 +298,26 @@ exports.changePassword = async (req, res) => {
 // changes done here
 exports.tutorList = async (req, res) => {
   try {
-    // Find all users who are tutors (including those who are also admins)
-    const tutors = await User.find(
-      {
-        roles: { $in: ["tutor", "admin"] },
-      },
-      "-password"
+    // Get the requesting user to determine institution access
+    const requestingUser = await User.findById(req.user._id).populate(
+      "institutions"
     );
 
-    // // Add isAdmin flag to response
-    // const tutorsWithAdminStatus = tutors.map(tutor => ({
-    //   ...tutor.toObject(),
-    //   isAdmin: tutor.roles?.includes('admin')  // Added optional chaining
-    // }));
+    // Build query based on user's institutions
+    let query = {
+      roles: { $in: ["tutor", "admin"] },
+    };
+
+    if (!requestingUser.isSuperAdmin) {
+      // Filter tutors by requesting user's institutions
+      const institutionIds = requestingUser.institutions.map(
+        (inst) => inst._id
+      );
+      query.institutions = { $in: institutionIds };
+    }
+
+    // Find all users who are tutors (including those who are also admins)
+    const tutors = await User.find(query, "-password").populate("institutions");
 
     res.json(tutors);
   } catch (error) {
@@ -504,3 +567,133 @@ exports.getUserByToken = async (req, res, next) => {
 //   saveToken(response.token);
 //   navigateToHome();
 // }
+
+// Get current user's profile
+exports.getMyProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .populate("institutions", "name code logo")
+      .populate("supervisor", "username email")
+      .select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isDeleted) {
+      return res.status(403).json({ message: "Account has been deleted" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update current user's profile
+exports.updateMyProfile = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { username, email, phone } = req.body;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isDeleted) {
+      return res.status(403).json({ message: "Account has been deleted" });
+    }
+
+    // Update allowed fields
+    if (username) user.username = username;
+    if (email) user.email = email;
+    if (phone !== undefined) user.phone = phone;
+
+    // Handle profile image upload
+    if (req.file) {
+      user.image = req.file.path;
+    }
+
+    await user.save();
+
+    // Return updated user without password
+    const updatedUser = await User.findById(userId)
+      .populate("institutions", "name code logo")
+      .populate("supervisor", "username email")
+      .select("-password");
+
+    res.json({
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      // Duplicate key error
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        message: `${field} already exists`,
+      });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Soft delete user account
+exports.deleteMyAccount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        message: "Password is required to delete account",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isDeleted) {
+      return res.status(400).json({
+        message: "Account is already deleted",
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await user.matchPassword(password);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        message: "Incorrect password",
+      });
+    }
+
+    // Check if user is an admin of any institution
+    const Institution = require("../../models/Institutions");
+    const adminInstitutions = await Institution.find({ admins: userId });
+
+    if (adminInstitutions.length > 0) {
+      return res.status(400).json({
+        message:
+          "Cannot delete account. You are an admin of one or more institutions. Please transfer admin rights first.",
+        institutions: adminInstitutions.map((inst) => inst.name),
+      });
+    }
+
+    // Soft delete the account
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    await user.save();
+
+    res.json({
+      message:
+        "Account deleted successfully. You can contact support to restore your account within 30 days.",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

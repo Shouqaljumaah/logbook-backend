@@ -13,6 +13,8 @@ const notificationsRouter = require("./apis/notifications/notifications.routes")
 const formSubmitionsRouter = require("./apis/formSubmitions/formSubmitions.routes");
 const announcementsRouter = require("./apis/announcements/announcements.routes");
 const fieldTemplateRouter = require("./apis/fieldTemplate/routes");
+const superadminRouter = require("./apis/superadmin/superadmin.routes");
+const institutionsRouter = require("./apis/superadmin/institutions.routes");
 const app = express();
 const PORT = 8000;
 
@@ -32,6 +34,8 @@ app.use("/notifications", notificationsRouter);
 app.use("/formSubmitions", formSubmitionsRouter);
 app.use("/announcements", announcementsRouter);
 app.use("/api/users", require("./apis/users/users.routes")); // changes done here
+app.use("/superadmin", superadminRouter);
+app.use("/institutions", institutionsRouter);
 connectDB();
 
 app.listen(PORT, () => {

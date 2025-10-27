@@ -10,6 +10,14 @@ exports.localStrategy = new LocalStrategy(
   async (username, password, done) => {
     try {
       const user = await Users.findOne({ username });
+
+      // Check if account is deleted
+      if (user && user.isDeleted) {
+        return done(null, false, {
+          message: "Account has been deleted. Contact support to restore.",
+        });
+      }
+
       const passwordsMatch = user
         ? await bcrypt.compare(password, user.password)
         : false;
@@ -43,6 +51,12 @@ const jwtVerify = async (jwtPayload, done) => {
 
     if (!user) {
       console.log("No user found with ID:", jwtPayload.id);
+      return done(null, false);
+    }
+
+    // Check if account is deleted
+    if (user.isDeleted) {
+      console.log("User account is deleted:", jwtPayload.id);
       return done(null, false);
     }
 

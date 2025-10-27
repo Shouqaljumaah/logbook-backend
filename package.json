@@ -4,7 +4,9 @@
   "main": "app.js",
   "scripts": {
     "start": "nodemon app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate": "node scripts/migrateToMultiInstitution.js",
+    "create-superadmin": "node scripts/createSuperAdmin.js"
   },
   "repository": {
     "type": "git",
