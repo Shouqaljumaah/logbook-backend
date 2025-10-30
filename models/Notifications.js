@@ -20,6 +20,11 @@ const NotificationSchema = new Schema(
       type: Date,
       default: Date.now,
     },
+    institution: {
+      type: Schema.Types.ObjectId,
+      ref: "Institution",
+      required: true,
+    },
   },
   { timestamps: true }
 );

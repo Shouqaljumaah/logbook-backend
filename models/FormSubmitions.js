@@ -26,6 +26,12 @@ const FormsSubmitionsSchema = new Schema(
       default: "pending",
       enum: ["pending", "completed", "rejected"], // Define allowed types
     },
+
+    institution: {
+      type: Schema.Types.ObjectId,
+      ref: "Institution",
+      required: true,
+    },
   },
   { timestamps: true }
 );

@@ -8,16 +8,16 @@ const FieldTemplatesSchema = new Schema({
   },
   hasDetails: {
     type: Boolean,
-    default: false
+    default: false,
   },
   details: {
     type: String,
-    default: ''
+    default: "",
   },
   type: {
     type: String,
     required: true,
-    enum: ['text', 'select', 'scale', 'date', 'textArea', 'checkbox' ] // Define allowed types
+    enum: ["text", "select", "scale", "date", "textArea", "checkbox"], // Define allowed types
   },
   scaleOptions: [{ type: String }],
 
@@ -36,8 +36,12 @@ const FieldTemplatesSchema = new Schema({
     type: String, // 1-10
   },
   options: [{ type: String }],
-  
 
+  institution: {
+    type: Schema.Types.ObjectId,
+    ref: "Institution",
+    required: true,
+  },
 });
 
 module.exports = model("FieldTemplates", FieldTemplatesSchema);

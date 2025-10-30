@@ -12,10 +12,15 @@ const AnnouncementSchema = new Schema(
     date: {
       type: Date,
       required: true,
-      default: Date.now
+      default: Date.now,
     },
     file: {
       type: String,
+    },
+    institution: {
+      type: Schema.Types.ObjectId,
+      ref: "Institution",
+      required: true,
     },
   },
   { timestamps: true }
