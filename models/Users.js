@@ -2,6 +2,7 @@ const { model, Schema } = require("mongoose");
 const type = require("mongoose/lib/schema/operators/type");
 
 const UserSchema = new Schema({
+  name: { type: String },
   username: {
     type: String,
     unique: true,
@@ -15,6 +16,7 @@ const UserSchema = new Schema({
     {
       type: String,
       enum: ["superadmin", "admin", "tutor", "resident"],
+      default: "resident",
     },
   ], // superadmin: platform admin, admin: institution admin, tutor/resident: regular users
   isFirstLogin: { type: Boolean, default: true },

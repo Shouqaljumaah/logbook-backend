@@ -9,31 +9,31 @@ const FormSubmitions = require("../../models/FormSubmitions");
 
 exports.signupUser = async (req, res) => {
   try {
-    // Get the admin user from the token
-    const adminUser = await User.findById(req.user._id).populate(
-      "institutions"
-    );
-    console.log("Admin user:", adminUser); // Debug log
+    // // Get the admin user from the token
+    // const adminUser = await User.findById(req.user._id).populate(
+    //   "institutions"
+    // );
 
-    // Check if user exists and is admin
-    if (!adminUser || !adminUser.roles.includes("admin")) {
-      return res.status(403).json({
-        message: "Only admins can create new users",
-      });
-    }
+    // // Check if user exists and is admin
+    // if (!adminUser || !adminUser.roles.includes("admin")) {
+    //   return res.status(403).json({
+    //     message: "Only admins can create new users",
+    //   });
+    // }
 
     // Remove spaces from username
     const username = req.body.username.replace(/\s+/g, "");
+    const name = req.body.name?.trim();
     const password = req.body.password;
-    const role = req.body.role; // Single role from request
+    const role = req.body.role.toLowerCase(); // Single role from request
     const email = req.body.email?.trim();
     const phone = req.body.phone?.trim();
     const institutionId = req.body.institutionId; // Institution to assign user to
 
     // Validate required fields
-    if (!username || !password || !role) {
+    if (!username || !password || !role || !name) {
       return res.status(400).json({
-        message: "Username, password and role are required",
+        message: "Username, password, name and role are required",
       });
     }
 
@@ -44,36 +44,36 @@ exports.signupUser = async (req, res) => {
       });
     }
 
-    // Determine institution - admin must be admin of the institution (in Institution.admins[])
-    const Institution = require("../../models/Institutions");
-    let institutions = [];
+    // // Determine institution - admin must be admin of the institution (in Institution.admins[])
+    // const Institution = require("../../models/Institutions");
+    // let institutions = [];
 
-    if (institutionId) {
-      // Verify admin is actually admin of this institution (not just member)
-      const institution = await Institution.findOne({
-        _id: institutionId,
-        admins: adminUser._id,
-      });
+    // if (institutionId) {
+    //   // Verify admin is actually admin of this institution (not just member)
+    //   const institution = await Institution.findOne({
+    //     _id: institutionId,
+    //     admins: adminUser._id,
+    //   });
 
-      if (!institution) {
-        return res.status(403).json({
-          message: "You are not an admin of this institution",
-        });
-      }
-      institutions = [institutionId];
-    } else {
-      // Find first institution where user is admin
-      const adminInstitutions = await Institution.find({
-        admins: adminUser._id,
-      });
+    //   if (!institution) {
+    //     return res.status(403).json({
+    //       message: "You are not an admin of this institution",
+    //     });
+    //   }
+    //   institutions = [institutionId];
+    // } else {
+    //   // Find first institution where user is admin
+    //   const adminInstitutions = await Institution.find({
+    //     admins: adminUser._id,
+    //   });
 
-      if (adminInstitutions.length === 0) {
-        return res.status(403).json({
-          message: "You are not an admin of any institution",
-        });
-      }
-      institutions = [adminInstitutions[0]._id];
-    }
+    //   if (adminInstitutions.length === 0) {
+    //     return res.status(403).json({
+    //       message: "You are not an admin of any institution",
+    //     });
+    //   }
+    //   institutions = [adminInstitutions[0]._id];
+    // }
 
     // Check if username already exists
     const existingUser = await User.findOne({ username });
@@ -90,22 +90,34 @@ exports.signupUser = async (req, res) => {
     // Create user with roles array and institution
     const user = await User.create({
       username,
+      name,
       password: hashedPassword,
       roles: [role], // Store role in an array
-      isFirstLogin: true,
+      isFirstLogin: false,
       email,
       phone,
-      institutions,
+      // institutions,
     });
 
     const populatedUser = await User.findById(user._id).populate(
       "institutions"
     );
 
+    // const payload = {
+    //   id: populatedUser.id,
+    //   username: populatedUser.username,
+    //   role: populatedUser.roles,
+    //   exp: Date.now() + parseInt(JWT_EXPIRATION_MS),
+    //   image: populatedUser.image,
+    //   name: populatedUser.name,
+    // };
+    // const token = jwt.sign(JSON.stringify(payload), JWT_SECRET);
     res.status(201).json({
       message: "User created successfully",
+      // token: token,
       user: {
         username: populatedUser.username,
+        name: populatedUser.name,
         roles: populatedUser.roles,
         _id: populatedUser._id,
         email: populatedUser.email,
@@ -230,7 +242,6 @@ exports.loginUser = async (req, res) => {
 
     // Normal login flow if password was already changed
 
-    console.log("user", user.roles);
     res.json({
       token,
       user: {
@@ -694,6 +705,224 @@ exports.deleteMyAccount = async (req, res) => {
         "Account deleted successfully. You can contact support to restore your account within 30 days.",
     });
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get residents supervised by a tutor in a specific institution
+exports.getResidentsByTutor = async (req, res) => {
+  try {
+    const tutorId = req.params.tutorId || req.user._id; // Use logged-in user if no tutorId provided
+    const { institutionId } = req.query;
+    console.log("tutorId", tutorId);
+    // Validate tutor exists
+    const tutor = await User.findById(tutorId);
+    if (!tutor) {
+      return res.status(404).json({ message: "Tutor not found" });
+    }
+
+    if (!tutor.roles.includes("tutor")) {
+      return res.status(400).json({ message: "User is not a tutor" });
+    }
+
+    // Build query
+    let query = {
+      // roles is an array of strings
+      roles: { $in: ["resident"] },
+      supervisor: tutorId,
+      // isDeleted: false, // Exclude deleted accounts
+    };
+
+    // Filter by institution if provided
+    if (institutionId) {
+      // institutions is an array of objects with _id and name properties
+      query.institutions = { $in: [institutionId] };
+    }
+
+    const residents = await User.find(query)
+      .populate("institutions", "name code logo")
+      .populate("supervisor", "username email")
+      .select("-password")
+      .sort({ username: 1 });
+    console.log("residents", residents);
+    // Get submission count for each resident
+    const FormSubmitions = require("../../models/FormSubmitions");
+
+    const residentsWithStats = await Promise.all(
+      residents.map(async (resident) => {
+        let submissionQuery = {
+          resident: resident._id,
+          tutor: tutorId,
+        };
+
+        // Filter submissions by institution if provided
+        if (institutionId) {
+          submissionQuery.institution = institutionId;
+        }
+
+        const submissionsCount = await FormSubmitions.countDocuments(
+          submissionQuery
+        );
+        const reviewedCount = await FormSubmitions.countDocuments({
+          ...submissionQuery,
+          status: "reviewed",
+        });
+
+        return {
+          ...resident.toObject(),
+          stats: {
+            totalSubmissions: submissionsCount,
+            reviewedSubmissions: reviewedCount,
+            pendingSubmissions: submissionsCount - reviewedCount,
+          },
+        };
+      })
+    );
+
+    console.log("residentsWithStats", residentsWithStats);
+
+    res.json({
+      tutor: {
+        _id: tutor._id,
+        username: tutor.username,
+        email: tutor.email,
+      },
+      institutionId: institutionId || "all",
+      residentsCount: residentsWithStats.length,
+      residents: residentsWithStats,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get resident details with submissions
+exports.getResidentDetails = async (req, res) => {
+  try {
+    const { residentId } = req.params;
+    const { institutionId } = req.query;
+    const requestingUser = req.user;
+
+    // Find resident
+    const resident = await User.findById(residentId)
+      .populate("institutions", "name code logo")
+      .populate("supervisor", "username email phone image")
+      .select("-password");
+
+    if (!resident) {
+      return res.status(404).json({ message: "Resident not found" });
+    }
+
+    if (!resident.roles.includes("resident")) {
+      return res.status(400).json({ message: "User is not a resident" });
+    }
+
+    if (resident.isDeleted) {
+      return res.status(403).json({ message: "Resident account is deleted" });
+    }
+
+    // Check permissions
+    // Tutors can only see their own residents
+    // Admins can see residents in their institutions
+    // Super admins can see all
+    if (!requestingUser.isSuperAdmin) {
+      if (requestingUser.roles.includes("tutor")) {
+        // Check if requesting tutor is the supervisor
+        if (
+          !resident.supervisor ||
+          resident.supervisor._id.toString() !== requestingUser._id.toString()
+        ) {
+          return res.status(403).json({
+            message: "You can only view your own residents",
+          });
+        }
+      } else if (requestingUser.roles.includes("admin")) {
+        // Check if resident is in admin's institutions
+        const Institution = require("../../models/Institutions");
+        const adminInstitutions = await Institution.find({
+          admins: requestingUser._id,
+        });
+        const adminInstIds = adminInstitutions.map((inst) =>
+          inst._id.toString()
+        );
+
+        const residentInstIds = resident.institutions.map((inst) =>
+          inst._id.toString()
+        );
+        const hasCommonInst = residentInstIds.some((id) =>
+          adminInstIds.includes(id)
+        );
+
+        if (!hasCommonInst) {
+          return res.status(403).json({
+            message: "You can only view residents in your institutions",
+          });
+        }
+      } else {
+        // Regular users cannot view other users' details
+        if (resident._id.toString() !== requestingUser._id.toString()) {
+          return res.status(403).json({
+            message: "You don't have permission to view this resident",
+          });
+        }
+      }
+    }
+
+    // Get submissions
+    const FormSubmitions = require("../../models/FormSubmitions");
+    let submissionQuery = { resident: residentId };
+
+    // Filter by institution if provided
+    if (institutionId) {
+      submissionQuery.institution = institutionId;
+    }
+
+    const submissions = await FormSubmitions.find(submissionQuery)
+      .populate("formTemplate", "formName score")
+      .populate({
+        path: "fieldRecord",
+        populate: {
+          path: "fieldTemplate",
+          select: "name type",
+        },
+      })
+      .populate("institution", "name code logo")
+      .populate("tutor", "username email")
+      .sort({ createdAt: -1 });
+
+    // Calculate statistics
+    const stats = {
+      totalSubmissions: submissions.length,
+      reviewedSubmissions: submissions.filter(
+        (sub) => sub.status === "reviewed"
+      ).length,
+      pendingSubmissions: submissions.filter((sub) => sub.status === "pending")
+        .length,
+    };
+
+    // Group submissions by institution
+    const submissionsByInstitution = {};
+    submissions.forEach((sub) => {
+      const instId = sub.institution._id.toString();
+      if (!submissionsByInstitution[instId]) {
+        submissionsByInstitution[instId] = {
+          institution: sub.institution,
+          count: 0,
+          submissions: [],
+        };
+      }
+      submissionsByInstitution[instId].count++;
+      submissionsByInstitution[instId].submissions.push(sub);
+    });
+
+    res.json({
+      resident: resident,
+      stats: stats,
+      submissions: submissions,
+      submissionsByInstitution: Object.values(submissionsByInstitution),
+    });
+  } catch (error) {
+    console.error("Error getting resident details:", error);
     res.status(500).json({ message: error.message });
   }
 };

@@ -670,7 +670,7 @@ exports.getUserInstitutions = async (req, res) => {
     const requestingUser = await User.findById(req.user._id).populate(
       "institutions"
     );
-    console.log(requestingUser.institutions);
+
     res.json(requestingUser.institutions);
   } catch (error) {
     console.error("Error fetching user institutions:", error);

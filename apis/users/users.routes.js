@@ -18,13 +18,16 @@ const {
   getMyProfile,
   updateMyProfile,
   deleteMyAccount,
+  getResidentsByTutor,
+  getResidentDetails,
 } = require("./users.controllers");
 
 // Apply authentication to all routes
 router.get("/", passport.authenticate("jwt", { session: false }), getAllUsers);
 router.post(
   "/signup",
-  passport.authenticate("jwt", { session: false }), // Add this middleware
+  upload.single("image"),
+  // passport.authenticate("jwt", { session: false }), // Add this middleware
   signupUser
 ); //admin signup, not need image upload
 router.post(
@@ -86,6 +89,25 @@ router.delete(
   "/profile/me",
   passport.authenticate("jwt", { session: false }),
   deleteMyAccount
+);
+
+// Resident management routes
+router.get(
+  "/residents/my-residents",
+  passport.authenticate("jwt", { session: false }),
+  getResidentsByTutor
+);
+
+router.get(
+  "/residents/by-tutor/:tutorId",
+  passport.authenticate("jwt", { session: false }),
+  getResidentsByTutor
+);
+
+router.get(
+  "/residents/:residentId/details",
+  passport.authenticate("jwt", { session: false }),
+  getResidentDetails
 );
 
 module.exports = router;
