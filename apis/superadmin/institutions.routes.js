@@ -18,6 +18,8 @@ const {
   getAllInstitutions,
   joinInstitution,
   getUserInstitutions,
+  assignUserToInstitution,
+  getUserRoleInInstitution,
 } = require("./institutions.controllers");
 
 // Apply authentication and super admin check to all routes
@@ -55,5 +57,10 @@ router.post(
   passport.authenticate("jwt", { session: false }),
   joinInstitution
 );
+
+// Role management routes
+router.post("/:id/assign-user", assignUserToInstitution);
+router.get("/:institutionId/user-role/:userId", getUserRoleInInstitution);
+router.get("/:institutionId/my-role", getUserRoleInInstitution);
 
 module.exports = router;

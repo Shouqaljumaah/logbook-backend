@@ -779,8 +779,6 @@ exports.getResidentsByTutor = async (req, res) => {
       })
     );
 
-    console.log("residentsWithStats", residentsWithStats);
-
     res.json({
       tutor: {
         _id: tutor._id,

@@ -44,6 +44,23 @@ const InstitutionSchema = new Schema(
         ref: "User",
       },
     ],
+
+    // Institution tutors(s) - users with tutor role for this institution
+    tutors: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    // Institution residents(s) - users with resident role for this institution
+    residents: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    // Institution residents(s) - users with resident role for this institution
     settings: {
       type: Schema.Types.Mixed,
       default: {},

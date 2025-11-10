@@ -1,5 +1,7 @@
 const Institution = require("../../models/Institutions");
 const User = require("../../models/Users");
+const FormTemplates = require("../../models/FormTemplates");
+const FormSubmitions = require("../../models/FormSubmitions");
 
 // Middleware to check if user is super admin
 exports.checkSuperAdmin = async (req, res, next) => {
@@ -619,10 +621,12 @@ exports.getInstitutionAdmins = async (req, res) => {
 };
 
 // Join institution (for tutors/residents via mobile app)
+// Users join as "resident" by default, admins can change role later
 exports.joinInstitution = async (req, res) => {
   try {
     const userId = req.user._id;
     const institutionId = req.params.id;
+    const { role } = req.body; // Optional: tutor or resident, defaults to resident
 
     const institution = await Institution.findById(institutionId);
     if (!institution) {
@@ -636,24 +640,31 @@ exports.joinInstitution = async (req, res) => {
     const user = await User.findById(userId);
 
     // Check if already joined
-    if (user.institutions.some((inst) => inst.toString() === institutionId)) {
+    const existingRole = user.getRoleInInstitution(institutionId);
+    if (existingRole) {
       return res.status(400).json({
-        message: "You have already joined this institution",
+        message: `You have already joined this institution as ${existingRole}`,
+        currentRole: existingRole,
       });
     }
 
-    // Add institution to user
-    user.institutions.push(institutionId);
+    // Default to resident role when joining
+    const assignedRole =
+      role && ["tutor", "resident"].includes(role) ? role : "resident";
+
+    // Assign role to user
+    user.assignRoleToInstitution(institutionId, assignedRole, userId);
     await user.save();
 
     res.json({
-      message: `Successfully joined ${institution.name}`,
+      message: `Successfully joined ${institution.name} as ${assignedRole}`,
       institution: {
         _id: institution._id,
         name: institution.name,
         code: institution.code,
         logo: institution.logo,
       },
+      role: assignedRole,
     });
   } catch (error) {
     console.error("Error joining institution:", error);
@@ -664,14 +675,259 @@ exports.joinInstitution = async (req, res) => {
   }
 };
 
-// get user's institutions
+// Assign or update user role in institution (Admin only)
+exports.assignUserToInstitution = async (req, res) => {
+  try {
+    const requestingUser = await User.findById(req.user._id);
+    const { id: institutionId } = req.params;
+    const { userId, role } = req.body;
+
+    // Validation
+    if (!role || !["admin", "tutor", "resident"].includes(role)) {
+      return res.status(400).json({
+        message: "Valid role is required (admin, tutor, or resident)",
+      });
+    }
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    // Get institution
+    const institution = await Institution.findById(institutionId);
+    if (!institution) {
+      return res.status(404).json({ message: "Institution not found" });
+    }
+
+    // Get target user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.isDeleted) {
+      return res.status(400).json({ message: "Cannot assign deleted user" });
+    }
+
+    // Permission check: Only super admins or institution admins can assign roles
+    if (!requestingUser.isSuperAdmin) {
+      const isAdmin = requestingUser.isAdminOfInstitution(institutionId);
+      if (!isAdmin) {
+        return res.status(403).json({
+          message:
+            "You don't have permission to assign users to this institution",
+        });
+      }
+    }
+
+    // Get current role if any
+    const currentRole = user.getRoleInInstitution(institutionId);
+
+    // Assign or update role
+    user.assignRoleToInstitution(institutionId, role, requestingUser._id);
+    await user.save();
+
+    // Update Institution.admins array for backward compatibility
+    if (role === "admin") {
+      if (
+        !institution.admins.some(
+          (admin) => admin.toString() === userId.toString()
+        )
+      ) {
+        institution.admins.push(userId);
+        await institution.save();
+      }
+    } else {
+      // Remove from admins if changing from admin to another role
+      if (currentRole === "admin") {
+        institution.admins = institution.admins.filter(
+          (admin) => admin.toString() !== userId.toString()
+        );
+        await institution.save();
+      }
+    }
+
+    // Get updated user with populated data
+    const updatedUser = await User.findById(userId)
+      .populate("institutionRoles.institution", "name code logo")
+      .select("-password");
+
+    res.json({
+      message: currentRole
+        ? `User role updated from ${currentRole} to ${role}`
+        : `User assigned as ${role}`,
+      user: {
+        _id: updatedUser._id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        institutionRoles: updatedUser.institutionRoles,
+      },
+      institution: {
+        _id: institution._id,
+        name: institution.name,
+      },
+      previousRole: currentRole,
+      newRole: role,
+    });
+  } catch (error) {
+    console.error("Error assigning user to institution:", error);
+    res.status(500).json({
+      message: "Failed to assign user to institution",
+      error: error.message,
+    });
+  }
+};
+
+// Get user's role in a specific institution
+exports.getUserRoleInInstitution = async (req, res) => {
+  try {
+    const { institutionId, userId } = req.params;
+    const requestingUser = req.user;
+
+    // Get target user (or self if not specified)
+    const targetUserId = userId || requestingUser._id;
+    const user = await User.findById(targetUserId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Permission check: Users can check their own role, admins can check any role in their institutions
+    if (
+      targetUserId.toString() !== requestingUser._id.toString() &&
+      !requestingUser.isSuperAdmin
+    ) {
+      const isAdmin = requestingUser.isAdminOfInstitution(institutionId);
+      if (!isAdmin) {
+        return res.status(403).json({
+          message: "You don't have permission to view this user's role",
+        });
+      }
+    }
+
+    const role = user.getRoleInInstitution(institutionId);
+
+    if (!role) {
+      return res.status(404).json({
+        message: "User is not a member of this institution",
+      });
+    }
+
+    const institutionRole = user.institutionRoles.find(
+      (ir) => ir.institution.toString() === institutionId.toString()
+    );
+
+    res.json({
+      userId: user._id,
+      username: user.username,
+      institutionId: institutionId,
+      role: role,
+      assignedAt: institutionRole?.assignedAt,
+      assignedBy: institutionRole?.assignedBy,
+    });
+  } catch (error) {
+    console.error("Error getting user role:", error);
+    res.status(500).json({
+      message: "Failed to get user role",
+      error: error.message,
+    });
+  }
+};
+
+// Get user's institutions with their roles
 exports.getUserInstitutions = async (req, res) => {
   try {
     const requestingUser = await User.findById(req.user._id).populate(
-      "institutions"
+      "institutionRoles.institution"
     );
 
-    res.json(requestingUser.institutions);
+    if (!requestingUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get institution IDs from institutionRoles
+    const institutionIds = requestingUser.institutionRoles.map(
+      (ir) => ir.institution._id
+    );
+
+    // Use aggregation to count form templates per institution
+    const formTemplatesCounts = await FormTemplates.aggregate([
+      {
+        $match: {
+          institution: { $in: institutionIds },
+        },
+      },
+      {
+        $group: {
+          _id: "$institution",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Use aggregation to count form submissions per institution
+    const formSubmissionsCounts = await FormSubmitions.aggregate([
+      {
+        $match: {
+          institution: { $in: institutionIds },
+        },
+      },
+      {
+        $group: {
+          _id: "$institution",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    // Create maps for quick lookup
+    const templatesCountMap = {};
+    formTemplatesCounts.forEach((item) => {
+      templatesCountMap[item._id.toString()] = item.count;
+    });
+
+    const submissionsCountMap = {};
+    formSubmissionsCounts.forEach((item) => {
+      submissionsCountMap[item._id.toString()] = item.count;
+    });
+
+    // Build response with institution details and user's role
+    const institutions = requestingUser.institutionRoles.map((ir) => {
+      const inst = ir.institution;
+      return {
+        _id: inst._id,
+        name: inst.name,
+        code: inst.code,
+        logo: inst.logo,
+        description: inst.description,
+        isActive: inst.isActive,
+        // User's role in this institution
+        userRole: ir.role,
+        assignedAt: ir.assignedAt,
+        // Counts
+        formTemplatesCount: templatesCountMap[inst._id.toString()] || 0,
+        formSubmissionsCount: submissionsCountMap[inst._id.toString()] || 0,
+      };
+    });
+
+    // Calculate totals
+    const totalFormTemplates = formTemplatesCounts.reduce(
+      (sum, item) => sum + item.count,
+      0
+    );
+    const totalFormSubmissions = formSubmissionsCounts.reduce(
+      (sum, item) => sum + item.count,
+      0
+    );
+
+    res.json({
+      institutions: institutions,
+      totals: {
+        institutionsCount: institutions.length,
+        formTemplatesCount: totalFormTemplates,
+        formSubmissionsCount: totalFormSubmissions,
+      },
+    });
   } catch (error) {
     console.error("Error fetching user institutions:", error);
     res.status(500).json({
@@ -685,7 +941,7 @@ exports.getUserInstitutions = async (req, res) => {
 exports.getAllInstitutions = async (req, res) => {
   try {
     const institutions = await Institution.find();
-    console.log("institutions are this ", institutions);
+
     return res.json(institutions);
   } catch (error) {
     console.error("Error fetching institutions:", error);
