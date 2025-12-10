@@ -20,11 +20,15 @@ const {
   getUserInstitutions,
   assignUserToInstitution,
   getUserRoleInInstitution,
+  getDashboard,
 } = require("./institutions.controllers");
 
 // Apply authentication and super admin check to all routes
 router.use(passport.authenticate("jwt", { session: false }));
 // router.use(checkSuperAdmin);
+
+// Dashboard route (must be before parameterized routes)
+router.get("/dashboard", getDashboard);
 
 // Institution CRUD routes
 router.get("/", getAllInstitutionsForAdminUser);

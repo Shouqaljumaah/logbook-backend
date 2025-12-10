@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Institution = require("../../models/Institutions");
 const User = require("../../models/Users");
 const FormTemplates = require("../../models/FormTemplates");
@@ -891,7 +892,7 @@ exports.getUserInstitutions = async (req, res) => {
       submissionsCountMap[item._id.toString()] = item.count;
     });
 
-    // Build response with institution details and user's role
+    // Build response with institution details, user's role, and level
     const institutions = requestingUser.institutionRoles.map((ir) => {
       const inst = ir.institution;
       return {
@@ -903,6 +904,7 @@ exports.getUserInstitutions = async (req, res) => {
         isActive: inst.isActive,
         // User's role in this institution
         userRole: ir.role,
+        userLevel: ir.level || "", // User's level in this institution (for residents)
         assignedAt: ir.assignedAt,
         // Counts
         formTemplatesCount: templatesCountMap[inst._id.toString()] || 0,
@@ -947,6 +949,509 @@ exports.getAllInstitutions = async (req, res) => {
     console.error("Error fetching institutions:", error);
     res.status(500).json({
       message: "Failed to fetch institutions",
+      error: error.message,
+    });
+  }
+};
+
+// Get comprehensive dashboard data for an institution
+exports.getDashboard = async (req, res) => {
+  try {
+    const { institutionId } = req.query;
+
+    // Validate institutionId is provided
+    if (!institutionId) {
+      return res.status(400).json({
+        message: "institutionId is required",
+      });
+    }
+
+    // Get the requesting user
+    const requestingUser = await User.findById(req.user._id);
+
+    // Check if user is authorized for this institution
+    if (!requestingUser.isSuperAdmin) {
+      const institution = await Institution.findOne({
+        _id: institutionId,
+        admins: requestingUser._id,
+      });
+
+      if (!institution) {
+        return res.status(403).json({
+          message: "You are not an admin of this institution",
+        });
+      }
+    }
+
+    // Verify institution exists
+    const institution = await Institution.findById(institutionId);
+    if (!institution) {
+      return res.status(404).json({
+        message: "Institution not found",
+      });
+    }
+
+    // Convert institutionId to ObjectId for queries
+    const institutionObjectId = new mongoose.Types.ObjectId(institutionId);
+
+    // Calculate date ranges
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+
+    // Helper function to calculate percentage change
+    const calculateChange = (current, previous) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / previous) * 100;
+    };
+
+    // Helper function to format relative time
+    const formatRelativeTime = (timestamp) => {
+      const seconds = Math.floor((now - timestamp) / 1000);
+      if (seconds < 60) return `${seconds} seconds ago`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60)
+        return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+      const days = Math.floor(hours / 24);
+      if (days < 30) return `${days} ${days === 1 ? "day" : "days"} ago`;
+      const months = Math.floor(days / 30);
+      return `${months} ${months === 1 ? "month" : "months"} ago`;
+    };
+
+    // Get all stats in parallel
+    const [
+      totalUsers,
+      totalForms,
+      totalSubmissions,
+      completedSubmissionsThisMonth,
+      pendingSubmissions,
+      residents,
+      tutors,
+      admins,
+      submissionsThisMonth,
+      submissionsLastMonth,
+      usersThisMonth,
+      usersLastMonth,
+      formsThisMonth,
+      formsLastMonth,
+      monthlySubmissionsData,
+      topFormsData,
+      levelDistributionData,
+    ] = await Promise.all([
+      // Total users in institution
+      User.countDocuments({
+        isDeleted: { $ne: true },
+        "institutionRoles.institution": institutionId,
+      }),
+
+      // Total forms
+      FormTemplates.countDocuments({ institution: institutionId }),
+
+      // Total submissions
+      FormSubmitions.countDocuments({ institution: institutionId }),
+
+      // Completed submissions this month
+      FormSubmitions.countDocuments({
+        institution: institutionId,
+        status: "completed",
+        createdAt: { $gte: startOfMonth },
+      }),
+
+      // Pending submissions
+      FormSubmitions.countDocuments({
+        institution: institutionId,
+        status: { $in: ["pending", "rejected"] },
+      }),
+
+      // Count residents
+      User.countDocuments({
+        isDeleted: { $ne: true },
+        "institutionRoles.institution": institutionId,
+        "institutionRoles.role": "resident",
+      }),
+
+      // Count tutors
+      User.countDocuments({
+        isDeleted: { $ne: true },
+        "institutionRoles.institution": institutionId,
+        "institutionRoles.role": "tutor",
+      }),
+
+      // Count admins (from Institution.admins array)
+      Institution.findById(institutionId).then(
+        (inst) => inst?.admins?.length || 0
+      ),
+
+      // Submissions this month
+      FormSubmitions.countDocuments({
+        institution: institutionId,
+        createdAt: { $gte: startOfMonth },
+      }),
+
+      // Submissions last month
+      FormSubmitions.countDocuments({
+        institution: institutionId,
+        createdAt: {
+          $gte: startOfLastMonth,
+          $lte: endOfLastMonth,
+        },
+      }),
+
+      // Users added this month
+      User.countDocuments({
+        isDeleted: { $ne: true },
+        "institutionRoles.institution": institutionId,
+        "institutionRoles.assignedAt": { $gte: startOfMonth },
+      }),
+
+      // Users added last month
+      User.countDocuments({
+        isDeleted: { $ne: true },
+        "institutionRoles.institution": institutionId,
+        "institutionRoles.assignedAt": {
+          $gte: startOfLastMonth,
+          $lte: endOfLastMonth,
+        },
+      }),
+
+      // Forms created this month
+      FormTemplates.countDocuments({
+        institution: institutionId,
+        createdAt: { $gte: startOfMonth },
+      }),
+
+      // Forms created last month
+      FormTemplates.countDocuments({
+        institution: institutionId,
+        createdAt: {
+          $gte: startOfLastMonth,
+          $lte: endOfLastMonth,
+        },
+      }),
+
+      // Monthly submissions for last 6 months
+      FormSubmitions.aggregate([
+        {
+          $match: {
+            institution: institutionObjectId,
+            createdAt: { $gte: sixMonthsAgo },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { "_id.year": 1, "_id.month": 1 } },
+      ]),
+
+      // Top forms by submission count
+      FormSubmitions.aggregate([
+        {
+          $match: { institution: institutionObjectId },
+        },
+        {
+          $group: {
+            _id: "$formTemplate",
+            count: { $sum: 1 },
+            completed: {
+              $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
+            },
+          },
+        },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+        {
+          $lookup: {
+            from: "formtemplates",
+            localField: "_id",
+            foreignField: "_id",
+            as: "form",
+          },
+        },
+        { $unwind: "$form" },
+        {
+          $project: {
+            formId: "$_id",
+            formName: "$form.formName",
+            submissionCount: "$count",
+            completionRate: {
+              $cond: [
+                { $eq: ["$count", 0] },
+                0,
+                { $multiply: [{ $divide: ["$completed", "$count"] }, 100] },
+              ],
+            },
+          },
+        },
+      ]),
+
+      // Level distribution
+      User.aggregate([
+        {
+          $match: {
+            isDeleted: { $ne: true },
+            "institutionRoles.institution": institutionObjectId,
+            "institutionRoles.role": "resident",
+          },
+        },
+        { $unwind: "$institutionRoles" },
+        {
+          $match: {
+            "institutionRoles.institution": institutionObjectId,
+            "institutionRoles.role": "resident",
+          },
+        },
+        {
+          $group: {
+            _id: "$institutionRoles.level",
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    // Calculate trends
+    const submissionsChange = calculateChange(
+      submissionsThisMonth,
+      submissionsLastMonth
+    );
+    const usersChange = calculateChange(usersThisMonth, usersLastMonth);
+    const formsChange = calculateChange(formsThisMonth, formsLastMonth);
+
+    // Calculate completion rates
+    const formsCompleted =
+      totalSubmissions > 0
+        ? (completedSubmissionsThisMonth / totalSubmissions) * 100
+        : 0;
+
+    // Count users with at least one submission
+    const usersWithSubmissions = await User.distinct("_id", {
+      isDeleted: { $ne: true },
+      "institutionRoles.institution": institutionId,
+      _id: {
+        $in: await FormSubmitions.distinct("resident", {
+          institution: institutionId,
+        }),
+      },
+    });
+
+    const userEngagement =
+      totalUsers > 0 ? (usersWithSubmissions.length / totalUsers) * 100 : 0;
+    const averageSubmissionsPerUser =
+      totalUsers > 0 ? totalSubmissions / totalUsers : 0;
+    const averageSubmissionsPerForm =
+      totalForms > 0 ? totalSubmissions / totalForms : 0;
+
+    // Format monthly submissions
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+
+    const monthlySubmissions = [];
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const monthData = monthlySubmissionsData.find(
+        (m) => m._id.year === year && m._id.month === month
+      );
+      monthlySubmissions.push({
+        month: `${year}-${String(month).padStart(2, "0")}`,
+        monthName: monthNames[month - 1],
+        count: monthData?.count || 0,
+      });
+    }
+
+    // Format top forms
+    const topForms = topFormsData.map((form) => ({
+      formId: form.formId.toString(),
+      formName: form.formName,
+      submissionCount: form.submissionCount,
+      completionRate: Math.round(form.completionRate * 10) / 10,
+    }));
+
+    // Format level distribution
+    const levelDistribution = {
+      R1: 0,
+      R2: 0,
+      R3: 0,
+      R4: 0,
+      R5: 0,
+    };
+    levelDistributionData.forEach((item) => {
+      const level = item._id || "";
+      if (levelDistribution.hasOwnProperty(level)) {
+        levelDistribution[level] = item.count;
+      }
+    });
+
+    // Get recent activities
+    const recentSubmissions = await FormSubmitions.find({
+      institution: institutionId,
+    })
+      .populate("resident", "username")
+      .populate("formTemplate", "formName")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+
+    const recentUsers = await User.find({
+      isDeleted: { $ne: true },
+      "institutionRoles.institution": institutionId,
+    })
+      .sort({ "institutionRoles.assignedAt": -1 })
+      .limit(3)
+      .lean();
+
+    const recentForms = await FormTemplates.find({
+      institution: institutionId,
+    })
+      .sort({ createdAt: -1 })
+      .limit(2)
+      .lean();
+
+    // Combine and format activities
+    const activities = [];
+
+    // Add submission activities
+    recentSubmissions.forEach((submission) => {
+      activities.push({
+        id: `submission_${submission._id}`,
+        type: "submission",
+        description: `${submission.resident?.username || "Unknown"} ${
+          submission.status === "completed" ? "completed" : "submitted"
+        } '${submission.formTemplate?.formName || "Form"}'`,
+        time: formatRelativeTime(submission.createdAt),
+        timestamp: submission.createdAt,
+        userId: submission.resident?._id?.toString(),
+        username: submission.resident?.username,
+        formId: submission.formTemplate?._id?.toString(),
+        formName: submission.formTemplate?.formName,
+      });
+    });
+
+    // Add user activities
+    recentUsers.forEach((user) => {
+      const institutionRole = user.institutionRoles.find(
+        (ir) =>
+          (ir.institution._id || ir.institution).toString() ===
+          institutionId.toString()
+      );
+      if (institutionRole) {
+        activities.push({
+          id: `user_${user._id}_${institutionRole.assignedAt}`,
+          type: "user",
+          description: `${user.username} was added as a new ${institutionRole.role}`,
+          time: formatRelativeTime(new Date(institutionRole.assignedAt)),
+          timestamp: institutionRole.assignedAt,
+          userId: user._id.toString(),
+          username: user.username,
+        });
+      }
+    });
+
+    // Add form activities
+    recentForms.forEach((form) => {
+      activities.push({
+        id: `form_${form._id}`,
+        type: "form",
+        description: `New form '${form.formName}' was created`,
+        time: formatRelativeTime(form.createdAt),
+        timestamp: form.createdAt,
+        formId: form._id.toString(),
+        formName: form.formName,
+        userId: requestingUser._id.toString(),
+        username: requestingUser.username,
+      });
+    });
+
+    // Sort activities by timestamp and limit to 10
+    const recentActivities = activities
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 10);
+
+    // Count incomplete forms (forms with no submissions or draft status)
+    const incompleteForms = await FormTemplates.countDocuments({
+      institution: institutionId,
+      _id: {
+        $nin: await FormSubmitions.distinct("formTemplate", {
+          institution: institutionId,
+        }),
+      },
+    });
+
+    // Build response
+    const dashboardData = {
+      stats: {
+        totalUsers,
+        totalForms,
+        totalSubmissions,
+        completedSubmissions: completedSubmissionsThisMonth,
+        pendingSubmissions,
+        totalResidents: residents,
+        totalTutors: tutors,
+        totalAdmins: admins,
+      },
+      trends: {
+        submissionsThisMonth,
+        submissionsLastMonth,
+        submissionsChange: Math.round(submissionsChange * 10) / 10,
+        usersThisMonth,
+        usersLastMonth,
+        usersChange: Math.round(usersChange * 10) / 10,
+        formsThisMonth,
+        formsLastMonth,
+        formsChange: Math.round(formsChange * 10) / 10,
+      },
+      completionRates: {
+        formsCompleted: Math.round(formsCompleted * 10) / 10,
+        userEngagement: Math.round(userEngagement * 10) / 10,
+        averageSubmissionsPerUser:
+          Math.round(averageSubmissionsPerUser * 10) / 10,
+        averageSubmissionsPerForm:
+          Math.round(averageSubmissionsPerForm * 10) / 10,
+      },
+      monthlySubmissions,
+      recentActivities,
+      pendingItems: {
+        pendingSubmissions,
+        pendingReviews: pendingSubmissions, // Using pending submissions as reviews
+        incompleteForms,
+      },
+      topForms,
+      userDistribution: {
+        residents,
+        tutors,
+        admins,
+      },
+      levelDistribution,
+    };
+
+    res.json(dashboardData);
+  } catch (error) {
+    console.error("Error fetching dashboard data:", error);
+    res.status(500).json({
+      message: "Failed to fetch dashboard data",
       error: error.message,
     });
   }

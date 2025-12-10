@@ -7,6 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate": "node scripts/migrateToMultiInstitution.js",
     "migrate-roles": "node scripts/migrateToInstitutionRoles.js",
+    "migrate-levels": "node scripts/migrateLevelSystem.js",
+    "set-resident-levels": "node scripts/setDefaultResidentLevels.js",
     "create-superadmin": "node scripts/createSuperAdmin.js"
   },
   "repository": {

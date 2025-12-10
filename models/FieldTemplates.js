@@ -36,6 +36,22 @@ const FieldTemplatesSchema = new Schema({
     type: String, // 1-10
   },
   options: [{ type: String }],
+  // Level-restricted options for select/checkbox fields
+  optionsWithLevels: [
+    {
+      value: { type: String, required: true },
+      minLevel: {
+        type: String,
+        enum: ["R1", "R2", "R3", "R4", "R5", ""],
+        default: "",
+      },
+      label: { type: String }, // Optional display label
+    },
+  ],
+  hasLevelRestrictions: {
+    type: Boolean,
+    default: false, // True if field options have level restrictions
+  },
 
   institution: {
     type: Schema.Types.ObjectId,

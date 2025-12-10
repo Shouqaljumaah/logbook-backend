@@ -20,6 +20,7 @@ const {
   deleteMyAccount,
   getResidentsByTutor,
   getResidentDetails,
+  updateUserLevel,
 } = require("./users.controllers");
 
 // Apply authentication to all routes
@@ -108,6 +109,13 @@ router.get(
   "/residents/:residentId/details",
   passport.authenticate("jwt", { session: false }),
   getResidentDetails
+);
+
+// Level management route
+router.patch(
+  "/:userId/level",
+  passport.authenticate("jwt", { session: false }),
+  updateUserLevel
 );
 
 module.exports = router;

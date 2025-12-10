@@ -170,47 +170,91 @@ exports.logoutUser = async (req, res) => {
 
 exports.getAllUsers = async (req, res) => {
   try {
-    // Get the requesting user to determine institution access
-    const requestingUser = await User.findById(req.user._id).populate(
-      "institutions"
-    );
+    const { institutionId } = req.query;
 
-    // Build query based on user's institutions
-    let query = {};
-    if (!requestingUser.isSuperAdmin) {
-      // Filter users by requesting user's institutions
-      const institutionIds = requestingUser.institutions.map(
-        (inst) => inst._id
-      );
-      query.institutions = { $in: institutionIds };
+    // Validate institutionId is provided
+    if (!institutionId) {
+      return res.status(400).json({
+        message: "institutionId is required",
+      });
     }
+
+    // Get the requesting user
+    const requestingUser = await User.findById(req.user._id);
+
+    // Check if user is authorized for this institution
+    if (!requestingUser.isSuperAdmin) {
+      // Check if requesting user is admin of this specific institution
+      const Institution = require("../../models/Institutions");
+      const institution = await Institution.findOne({
+        _id: institutionId,
+        admins: requestingUser._id,
+      });
+
+      if (!institution) {
+        return res.status(403).json({
+          message: "You are not an admin of this institution",
+        });
+      }
+    }
+
+    // Find users who belong to this institution
+    const query = {
+      isDeleted: { $ne: true },
+      "institutionRoles.institution": institutionId,
+    };
 
     const users = await User.find(query, "-password")
       .populate("supervisor")
-      .populate("institutions")
-      .sort({ createdAt: -1 }); // Exclude password field
+      .populate("institutionRoles.institution")
+      .sort({ createdAt: -1 });
 
-    // Add totalSubmissions to each user
-    const usersWithSubmissions = await Promise.all(
+    // Add totalSubmissions and filter institutionRoles to show only the requested institution
+    const usersWithDetails = await Promise.all(
       users.map(async (user) => {
+        const userObj = user.toObject();
+
+        // Calculate total submissions for this institution only
         let totalSubmissions = 0;
-        if (user.roles.includes("tutor")) {
+        // Filter to show only the role for the requested institution
+        const institutionRole = userObj.institutionRoles.find(
+          (ir) => ir.institution._id.toString() === institutionId.toString()
+        );
+
+        if (
+          institutionRole?.role === "tutor" ||
+          institutionRole?.role === "admin"
+        ) {
           totalSubmissions = await FormSubmitions.countDocuments({
             tutor: user._id,
+            institution: institutionId,
           });
-        } else {
+        } else if (institutionRole?.role === "resident") {
           totalSubmissions = await FormSubmitions.countDocuments({
             resident: user._id,
+            institution: institutionId,
           });
         }
+
         return {
-          ...user.toObject(),
+          _id: userObj._id,
+          username: userObj.username,
+          email: userObj.email,
+          phoneNumber: userObj.phoneNumber,
+          supervisor: userObj.supervisor,
+          isSuperAdmin: userObj.isSuperAdmin,
+          // Show only the role in this institution
+          role: institutionRole?.role,
+          level: institutionRole?.level || "",
+          assignedAt: institutionRole?.assignedAt,
           totalSubmissions,
+          createdAt: userObj.createdAt,
+          updatedAt: userObj.updatedAt,
         };
       })
     );
 
-    res.json(usersWithSubmissions);
+    res.json(usersWithDetails);
   } catch (error) {
     console.error("Error fetching users:", error);
     res.status(500).json({ message: "Failed to fetch users" });
@@ -309,28 +353,69 @@ exports.changePassword = async (req, res) => {
 // changes done here
 exports.tutorList = async (req, res) => {
   try {
-    // Get the requesting user to determine institution access
-    const requestingUser = await User.findById(req.user._id).populate(
-      "institutions"
-    );
+    const { institutionId } = req.query;
 
-    // Build query based on user's institutions
-    let query = {
-      roles: { $in: ["tutor", "admin"] },
-    };
-
-    if (!requestingUser.isSuperAdmin) {
-      // Filter tutors by requesting user's institutions
-      const institutionIds = requestingUser.institutions.map(
-        (inst) => inst._id
-      );
-      query.institutions = { $in: institutionIds };
+    // Validate institutionId is provided
+    if (!institutionId) {
+      return res.status(400).json({
+        message: "institutionId is required",
+      });
     }
 
-    // Find all users who are tutors (including those who are also admins)
-    const tutors = await User.find(query, "-password").populate("institutions");
+    // Get the requesting user
+    const requestingUser = await User.findById(req.user._id);
 
-    res.json(tutors);
+    // Check if user is authorized for this institution
+    if (!requestingUser.isSuperAdmin) {
+      // Check if requesting user is admin of this specific institution
+      const Institution = require("../../models/Institutions");
+      const institution = await Institution.findOne({
+        _id: institutionId,
+        admins: requestingUser._id,
+      });
+
+      if (!institution) {
+        return res.status(403).json({
+          message: "You are not an admin of this institution",
+        });
+      }
+    }
+
+    // Find users who are tutors or admins in this specific institution
+    const query = {
+      isDeleted: { $ne: true },
+      "institutionRoles.institution": institutionId,
+      "institutionRoles.role": { $in: ["tutor", "admin"] },
+    };
+
+    const tutors = await User.find(query, "-password").populate(
+      "institutionRoles.institution"
+    );
+
+    // Transform to show only their role in this institution
+    const tutorsWithRoles = tutors.map((user) => {
+      const userObj = user.toObject();
+
+      // Filter to show only the role for the requested institution
+      const institutionRole = userObj.institutionRoles.find(
+        (ir) => ir.institution._id.toString() === institutionId.toString()
+      );
+
+      return {
+        _id: userObj._id,
+        username: userObj.username,
+        email: userObj.email,
+        phoneNumber: userObj.phoneNumber,
+        isSuperAdmin: userObj.isSuperAdmin,
+        // Show only the role in this institution
+        role: institutionRole?.role,
+        level: institutionRole?.level || "",
+        assignedAt: institutionRole?.assignedAt,
+        createdAt: userObj.createdAt,
+      };
+    });
+
+    res.json(tutorsWithRoles);
   } catch (error) {
     console.error("Error fetching tutors:", error);
     res.status(500).json({
@@ -541,7 +626,10 @@ exports.updateUser = async (req, res) => {
 // get user by id
 exports.getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).populate("supervisor");
+    console.log("getUserById", req.params.id);
+    const user = await User.findById(req.params.id)
+      .populate("supervisor")
+      .populate("institutionRoles.institution");
 
     res.json(user);
   } catch (error) {
@@ -921,6 +1009,88 @@ exports.getResidentDetails = async (req, res) => {
     });
   } catch (error) {
     console.error("Error getting resident details:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Update user level for a specific institution (Admin/Tutor only)
+exports.updateUserLevel = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { level, institutionId } = req.body;
+    const requestingUser = await User.findById(req.user._id);
+
+    // Validate required fields
+    if (!institutionId) {
+      return res.status(400).json({
+        message: "institutionId is required",
+      });
+    }
+
+    // Validate level
+    const validLevels = ["R1", "R2", "R3", "R4", "R5", ""];
+    if (!validLevels.includes(level)) {
+      return res.status(400).json({
+        message: "Invalid level. Must be R1, R2, R3, R4, R5, or empty",
+      });
+    }
+
+    // Get target user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if user has role in this institution
+    const userRole = user.getRoleInInstitution(institutionId);
+    if (!userRole) {
+      return res.status(400).json({
+        message: "User is not a member of this institution",
+      });
+    }
+
+    // Check if target user is a resident in this institution
+    if (userRole !== "resident") {
+      return res.status(400).json({
+        message: "Can only set level for residents",
+      });
+    }
+
+    // Permission check: Only super admins, admins, or tutors can update levels
+    if (!requestingUser.isSuperAdmin) {
+      const requestingUserRole =
+        requestingUser.getRoleInInstitution(institutionId);
+
+      if (
+        !requestingUserRole ||
+        !["admin", "tutor"].includes(requestingUserRole)
+      ) {
+        return res.status(403).json({
+          message:
+            "Only admins or tutors of this institution can update resident levels",
+        });
+      }
+    }
+
+    // Update level for this institution
+    const oldLevel = user.getLevelInInstitution(institutionId);
+    user.setLevelInInstitution(institutionId, level);
+    await user.save();
+
+    res.json({
+      message: `User level updated from ${oldLevel || "none"} to ${
+        level || "none"
+      } in this institution`,
+      user: {
+        _id: user._id,
+        username: user.username,
+      },
+      institutionId: institutionId,
+      oldLevel: oldLevel,
+      newLevel: level,
+    });
+  } catch (error) {
+    console.error("Error updating user level:", error);
     res.status(500).json({ message: error.message });
   }
 };
