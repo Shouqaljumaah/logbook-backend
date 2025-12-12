@@ -693,7 +693,7 @@ exports.getMyProfile = async (req, res) => {
 exports.updateMyProfile = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { username, email, phone } = req.body;
+    const { username, email, phone, name } = req.body;
 
     const user = await User.findById(userId);
 
@@ -709,7 +709,7 @@ exports.updateMyProfile = async (req, res) => {
     if (username) user.username = username;
     if (email) user.email = email;
     if (phone !== undefined) user.phone = phone;
-
+    if (name) user.name = name;
     // Handle profile image upload
     if (req.file) {
       user.image = req.file.path;
