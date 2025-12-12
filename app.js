@@ -25,7 +25,7 @@ passport.use(localStrategy);
 passport.use(jwtStrategy);
 
 app.use("/media", express.static(path.join(__dirname, "media")));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "./uploads")));
 
 app.use("/fieldTemplate", fieldTemplateRouter);
 app.use("/formTemplates", formTemplatesRouter);
