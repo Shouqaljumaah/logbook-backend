@@ -366,20 +366,20 @@ exports.tutorList = async (req, res) => {
     const requestingUser = await User.findById(req.user._id);
 
     // Check if user is authorized for this institution
-    if (!requestingUser.isSuperAdmin) {
-      // Check if requesting user is admin of this specific institution
-      const Institution = require("../../models/Institutions");
-      const institution = await Institution.findOne({
-        _id: institutionId,
-        admins: requestingUser._id,
-      });
+    // if (!requestingUser.isSuperAdmin) {
+    //   // Check if requesting user is admin of this specific institution
+    //   const Institution = require("../../models/Institutions");
+    //   const institution = await Institution.findOne({
+    //     _id: institutionId,
+    //     admins: requestingUser._id,
+    //   });
 
-      if (!institution) {
-        return res.status(403).json({
-          message: "You are not an admin of this institution",
-        });
-      }
-    }
+    //   if (!institution) {
+    //     return res.status(403).json({
+    //       message: "You are not an admin of this institution",
+    //     });
+    //   }
+    // }
 
     // Find users who are tutors or admins in this specific institution
     const query = {
