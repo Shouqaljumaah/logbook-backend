@@ -15,6 +15,7 @@ const announcementsRouter = require("./apis/announcements/announcements.routes")
 const fieldTemplateRouter = require("./apis/fieldTemplate/routes");
 const superadminRouter = require("./apis/superadmin/superadmin.routes");
 const institutionsRouter = require("./apis/superadmin/institutions.routes");
+const constantsRouter = require("./apis/constants/constants.routes");
 const app = express();
 const PORT = 8000;
 
@@ -36,6 +37,7 @@ app.use("/announcements", announcementsRouter);
 app.use("/api/users", require("./apis/users/users.routes")); // changes done here
 app.use("/superadmin", superadminRouter);
 app.use("/institutions", institutionsRouter);
+app.use("/constants", constantsRouter);
 connectDB();
 
 app.listen(PORT, () => {

@@ -148,24 +148,65 @@ exports.getFormSubmitions = async (req, res) => {
 exports.reviewFormSubmitions = async (req, res) => {
   const { formSubmitionsId } = req.params;
   const fieldRecords = req.body.fieldRecords;
+  const { assessment, assessmentComments } = req.body; // Assessment data from tutor
   const createdFieldRecord = [];
+  const tutorId = req.user?._id; // Get tutor ID from authenticated user
 
   try {
-    // Create field records
-    for (const record of fieldRecords) {
-      const newFieldRecord = await FieldRecords.create({
-        ...record,
-        formSubmitions: formSubmitionsId,
-      });
-      createdFieldRecord.push(newFieldRecord._id);
+    // Create field records if provided
+    if (fieldRecords && fieldRecords.length > 0) {
+      for (const record of fieldRecords) {
+        const newFieldRecord = await FieldRecords.create({
+          ...record,
+          formSubmitions: formSubmitionsId,
+        });
+        createdFieldRecord.push(newFieldRecord._id);
+      }
     }
 
-    // Update form submission with new field records
+    // Prepare update object
+    const updateData = {};
+    const hasFieldRecords = createdFieldRecord.length > 0;
+
+    // Add field records if any were created
+    if (hasFieldRecords) {
+      updateData.$push = { fieldRecord: { $each: createdFieldRecord } };
+    }
+
+    // Add assessment data if provided
+    if (assessment) {
+      // Validate assessment value - fetch from constants
+      const ASSESSMENT_OPTIONS = require("../../constants/assessmentOptions");
+      const validAssessments = ASSESSMENT_OPTIONS;
+
+      if (!validAssessments.includes(assessment)) {
+        return res.status(400).json({
+          message: `Invalid assessment. Must be one of: ${validAssessments.join(", ")}`,
+        });
+      }
+
+      // Use $set for assessment fields
+      if (!updateData.$set) {
+        updateData.$set = {};
+      }
+      updateData.$set.assessment = assessment;
+      updateData.$set.assessedAt = new Date();
+      updateData.$set.assessedBy = tutorId;
+
+      if (assessmentComments) {
+        updateData.$set.assessmentComments = assessmentComments;
+      } else {
+        updateData.$set.assessmentComments = null;
+      }
+
+      // If assessment is provided, mark as completed
+      updateData.$set.status = "completed";
+    }
+
+    // Update form submission
     const foundFormSubmitions = await FormSubmitions.findByIdAndUpdate(
       formSubmitionsId,
-      {
-        $push: { fieldRecord: { $each: createdFieldRecord } },
-      },
+      updateData,
       { new: true } // Return updated document
     );
 
@@ -173,30 +214,40 @@ exports.reviewFormSubmitions = async (req, res) => {
       return res.status(404).json({ message: "Form submission not found" });
     }
 
-    // Get form template and check completion
-    const formTemplate = await FormTemplates.findById(
-      foundFormSubmitions.formTemplate
-    );
-    if (!formTemplate) {
-      return res.status(404).json({ message: "Form template not found" });
+    // Get form template and check completion (if field records were added)
+    if (createdFieldRecord.length > 0) {
+      const formTemplate = await FormTemplates.findById(
+        foundFormSubmitions.formTemplate
+      );
+      if (!formTemplate) {
+        return res.status(404).json({ message: "Form template not found" });
+      }
+
+      const fieldTemplatesCount = formTemplate.fieldTemplates.length;
+      const fieldRecordsCount = foundFormSubmitions.fieldRecord.length;
+
+      // Update status if all fields are completed (only if not already set by assessment)
+      if (fieldRecordsCount === fieldTemplatesCount && !assessment) {
+        const updatedFormSubmition = await FormSubmitions.findByIdAndUpdate(
+          formSubmitionsId,
+          { $set: { status: "completed" } },
+          { new: true }
+        )
+          .populate("fieldRecord")
+          .populate("assessedBy", "name username");
+
+        return res.status(200).json(updatedFormSubmition);
+      }
     }
 
-    const fieldTemplatesCount = formTemplate.fieldTemplates.length;
-    const fieldRecordsCount = foundFormSubmitions.fieldRecord.length;
+    // Populate and return the updated submission
+    const updatedFormSubmition = await FormSubmitions.findById(formSubmitionsId)
+      .populate("fieldRecord")
+      .populate("assessedBy", "name username")
+      .populate("resident", "name username")
+      .populate("tutor", "name username");
 
-    // Update status if all fields are completed
-    if (fieldRecordsCount === fieldTemplatesCount) {
-      const updatedFormSubmition = await FormSubmitions.findByIdAndUpdate(
-        formSubmitionsId,
-        { $set: { status: "completed" } },
-        { new: true }
-      ).populate("fieldRecord");
-
-      return res.status(200).json(updatedFormSubmition);
-    }
-
-    // If not all fields are completed, return the current state
-    return res.status(200).json(foundFormSubmitions);
+    return res.status(200).json(updatedFormSubmition);
   } catch (e) {
     res.status(500).json({ message: e.message });
   }
